@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% set active = 'network' %}
+{% block scripts %}{% endblock %}
+{% block title %}Network · omv-monitor{% endblock %}
+{% block bodycls %}is-detail{% endblock %}
+{% block sidebar %}{% include "_network_side.html" %}{% endblock %}
+{% block body %}
+<header class="ihead">
+  <h1 class="large">Network</h1>
+  <p class="sub">Edit WireGuard peers, restore snapshots, restart a server service and see what was changed from this page.</p>
+</header>
+{% if done %}<p class="{{ 'inset clear' if done.ok else 'banner' }}" role="{{ 'status' if done.ok else 'alert' }}">
+  {{ done.action|capitalize }} {{ done.args.unit or '' }}: {{ 'done' if done.ok else 'failed' }} ({{ done.detail }}). </p>{% endif %}
+<section aria-labelledby="h-net-pending"><h2 class="sh" id="h-net-pending">Pending change</h2>
+  {% if pending %}<p class="banner" role="alert">{{ pending.summary }}. It reverts automatically at {{ pending.at }} unless you keep it.</p>
+  <ul class="inset"><li><span class="ln">Keep or undo this change</span>
+    {% for act, label in (('confirm', 'Keep'), ('revert', 'Undo')) %}<form method="post" action="/network/pending/{{ act }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ pending.id }}">
+      <button class="pill-btn" type="submit">{{ label }}</button></form>{% endfor %}</li></ul>
+  {% else %}<ul class="inset"><li><span class="ln">{{ 'No change is waiting.' if pending is not none else 'n/a' }}</span></li></ul>{% endif %}
+</section>
+<section aria-labelledby="h-net-peers"><h2 class="sh" id="h-net-peers">WireGuard peers</h2>
+  <ul class="inset">{% for p in peers or [] %}
+    <li><span class="ln"><a href="/network/peer/{{ p.public_key|urlid }}">{{ p.name }}</a></span>
+      <span class="lt">{{ p.allowed_ips|join(', ') }}</span>
+      <span class="cap {{ 'good' if p.enabled else 'idle' }}">{{ 'enabled' if p.enabled else 'disabled' }}</span></li>{% else %}
+    <li><span class="ln">{{ 'No peers.' if peers is not none else 'n/a' }}</span></li>{% endfor %}
+  </ul>
+  {% for e in restorable %}<form method="post" action="/network/peer/rename">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="public_key" value="{{ e.args.public_key }}">
+    <input type="hidden" name="name" value="{{ e.args.old }}"><button class="pill-btn" type="submit">Restore name {{ e.args.old }}</button></form>{% endfor %}
+</section>
+<section aria-labelledby="h-net-snap"><h2 class="sh" id="h-net-snap">Snapshots</h2>
+  <ul class="inset">{% for sn in snapshots or [] %}
+    <li><span class="ln">{{ sn.time }}</span><span class="lt">{{ sn.id }}</span>
+      <form method="post" action="/network/restore">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="snapshot" value="{{ sn.id }}">
+        <button class="pill-btn" type="submit">Restore</button></form></li>{% else %}
+    <li><span class="ln">{{ 'No snapshots.' if snapshots is not none else 'n/a' }}</span></li>{% endfor %}
+  </ul>
+</section>
+<section aria-labelledby="h-net-svc"><h2 class="sh" id="h-net-svc">Services</h2>
+  <ul class="inset">{% for s in services %}
+    <li><span class="ln">{{ s.label }}</span><span class="cap {{ {'running': 'good', 'stopped': 'bad'}.get(s.state, 'idle') }}">{{ s.state }}</span>
+    {% if enabled %}<form method="post" action="/network/restart">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="unit" value="{{ s.name }}">
+      <button class="pill-btn" type="submit">Restart</button></form>{% endif %}</li>{% else %}
+    <li><span class="ln">No services known.</span></li>{% endfor %}
+  </ul>
+  {% if not enabled %}<p class="sub">Actions are disabled: the host helper is not configured.</p>{% endif %}
+</section>
+<section aria-labelledby="h-net-log"><h2 class="sh" id="h-net-log">Audit log</h2>
+  <ul class="inset">{% for e in log %}
+    <li><span class="ln">{{ e.when }} {{ e.what }}</span>
+      <span class="lt">{{ 'ok' if e.ok else 'failed' }}: {{ e.detail }} ({{ e.remote_addr or 'n/a' }})</span></li>{% else %}
+    <li><span class="ln">Nothing recorded yet.</span></li>{% endfor %}
+  </ul>
+</section>
+{% endblock %}

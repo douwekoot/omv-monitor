@@ -1,0 +1,44 @@
+# Backup targets. Defaults only: edits made in the app are stored as overrides in data/.
+# Every value marked TO-FILL is a placeholder, not a real host.
+
+# NAS data disk (sdb, not the system disk); each target gets its own restic repo below it.
+destination_root = "/srv/dev-disk-by-uuid-CHANGE-ME/backups"
+
+[[targets]]
+name = "omv"
+label = "Server (OMV)"
+kind = "local"
+enabled = true
+interval_h = 24
+categories = ["omv-config", "host-config", "compose", "monitor-data"]
+include = []
+exclude = []
+retention = {daily = 7, weekly = 4, monthly = 6}
+
+[[targets]]
+name = "pc"
+label = "Desktop PC (Fedora)"
+kind = "ssh"
+hosts = ["192.168.1.20"]            # pc, enp42s0
+user = "omvbackup"
+mac = "02:00:00:00:00:01"
+shutdown_after_wol = true
+enabled = true
+interval_h = 24
+categories = ["home", "system-settings", "gnome-settings", "packages", "users"]
+include = []
+exclude = ["/home/*/.cache"]
+retention = {daily = 7, weekly = 4, monthly = 6}
+
+[[targets]]
+name = "laptop"
+label = "Laptop (Fedora)"
+kind = "ssh"
+hosts = ["10.8.0.2"]               # WireGuard IP (devices.toml); add the LAN address once known
+user = "omvbackup"
+enabled = false                      # until the laptop is set up (wiki: backups, laptop setup)
+interval_h = 24
+categories = ["home", "system-settings", "gnome-settings", "packages", "users"]
+include = []
+exclude = ["/home/*/.cache"]
+retention = {daily = 7, weekly = 4, monthly = 6}

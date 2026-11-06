@@ -1,0 +1,20 @@
+[Unit]
+Description=omv-netctl privileged helper for the OMV monitor
+After=network-online.target docker.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /opt/omv-monitor/host/omv-netctl.py serve
+RuntimeDirectory=omv-netctl
+# keep the dir across restarts: the web container bind-mounts it and would lose a recreated one
+RuntimeDirectoryPreserve=yes
+StateDirectory=omv-netctl
+StateDirectoryMode=0700
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

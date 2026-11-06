@@ -1,0 +1,5 @@
+[Unit]
+Description=Export a folder from the newest requested %i backup snapshot
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/omv-monitor/host/omv-device-backup.py export %i

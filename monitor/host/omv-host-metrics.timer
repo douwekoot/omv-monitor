@@ -1,0 +1,8 @@
+[Unit]
+Description=Run omv-host-metrics every 5 min
+[Timer]
+OnBootSec=60s
+OnUnitActiveSec=5min
+AccuracySec=1s
+[Install]
+WantedBy=timers.target

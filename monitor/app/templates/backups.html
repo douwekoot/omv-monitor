@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% set active = 'backups' %}
+{% block title %}Backups · omv-monitor{% endblock %}
+{% block bodycls %}is-detail{% endblock %}
+{% block sidebar %}{% include "_backups_side.html" %}{% endblock %}
+{% block body %}
+<header class="ihead">
+  <h1 class="large">Backups</h1>
+  <p class="sub">Device backups are restic repositories on the NAS disk, one per target. Below them are the nightly archives of
+    the monitor itself; a download lands on the device you are using{%- if device %} (<strong>{{ device }}</strong>){% endif %}.
+    The .env file and certificates are backed up too, but stay on the NAS and are never offered here.</p>
+</header>
+<section aria-labelledby="h-bk-targets"><h2 class="sh" id="h-bk-targets">Device backups</h2>
+  <ul class="inset">{% for b in brows %}
+    <li><div class="lt"><p class="ln"><a href="/backups/targets/{{ b.name }}">{{ b.label }}</a></p>
+      <p class="ls">{% if b.state == 'disabled' %}Not scheduled{% else %}Every {{ intervals[b.name] }} h · last success {{ b.ago }}{% if b.size is not none %} · {{ b.size|bytes }}{% endif %}{% endif %}</p></div>
+      <span class="cap {{ b.cls }}">{{ b.state }}</span></li>{% endfor %}
+  </ul>
+</section>
+{% for kind, files in kinds.items() %}
+<section aria-labelledby="h-bk-{{ kind }}"><h2 class="sh" id="h-bk-{{ kind }}">{{ kind|capitalize }}</h2>
+  {% if files %}
+  <ul class="inset">{% for f in files %}
+    <li><span class="lt"><span class="ln">{{ f.when }}</span> <span class="muted">{{ f.size|bytes }}</span></span>
+      <a class="pill-btn" href="/backups/{{ kind }}/{{ f.name }}" download>Download</a></li>{% endfor %}
+  </ul>
+  {% else %}<p class="inset pad muted">No backups yet.</p>{% endif %}
+</section>
+{% endfor %}
+{% endblock %}

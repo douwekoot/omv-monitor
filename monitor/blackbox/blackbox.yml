@@ -1,0 +1,6 @@
+modules:
+  icmp: {prober: icmp, timeout: 3s}
+  dns_example:
+    prober: dns
+    timeout: 3s
+    dns: {query_name: example.org, query_type: A}

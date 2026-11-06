@@ -1,0 +1,7 @@
+[Unit]
+Description=Check for new monitor findings every 60 s
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=60s
+[Install]
+WantedBy=timers.target

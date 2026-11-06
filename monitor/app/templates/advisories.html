@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon %}
+{% set active = 'advisories' %}
+{% set label = {'pass': 'passing', 'advisory': 'advisory', 'finding': 'finding'} %}
+{% set capcls = {'pass': 'good', 'advisory': 'warn', 'finding': 'bad'} %}
+{% block title %}Advisories · omv-monitor{% endblock %}
+{% block bodycls %}is-overview{% endblock %}
+{% block sidebar %}{% include "_rules.html" %}{% endblock %}
+{% block body %}
+<header class="ihead">
+  <h1 class="large">Advisories</h1>
+  <p class="sub">Every rule this app checks, evaluated on each page load against the latest Prometheus values.</p>
+</header>
+{% for group, rows in groups %}
+<section aria-labelledby="h-g{{ loop.index }}"><h2 class="sh" id="h-g{{ loop.index }}">{{ group }}</h2>
+  <ul class="inset">{% for rid, title, about in rows %}{% set st = rules[rid].status %}
+    <li><span class="sev {{ st }}">{{ icon('ok' if st == 'pass' else st) }}</span>
+      <div class="lt"><p class="ln"><a href="/advisories/{{ rid }}">{{ title }}</a></p><p class="ls">{{ about }}</p></div>
+      <span class="cap {{ capcls[st] }}">{{ label[st] }}</span></li>{% endfor %}</ul>
+</section>
+{% endfor %}
+<section aria-labelledby="h-how"><h2 class="sh" id="h-how">How advisories are raised</h2>
+  <div class="inset pad prose">
+    <ul>
+      <li>A <strong>finding</strong> means something is broken or unsafe. An <strong>advisory</strong> means it is worth a look but nothing is broken, or a value was not reported.</li>
+      <li>Rules run when a page loads, on the newest sample in Prometheus. The host script refreshes the posture values every 15 seconds and Prometheus scrapes every 15 seconds, so a change shows within about 30 seconds.</li>
+      <li>New findings are emailed (the host script checks every minute). Raised and cleared events are kept in the <a href="/alerts">alert history</a>. Advisories are only shown here.</li>
+      <li>Not raised on purpose: an idle WireGuard peer (the phone is often off the VPN) and the unused wlp3s0 interface.</li>
+    </ul>
+  </div>
+</section>
+{% endblock %}

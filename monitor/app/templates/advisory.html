@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon %}
+{% set active = 'advisories' %}
+{% set label = {'pass': 'passing', 'advisory': 'advisory', 'finding': 'finding'} %}
+{% set capcls = {'pass': 'good', 'advisory': 'warn', 'finding': 'bad'} %}
+{% block title %}{{ title }} · Advisories · omv-monitor{% endblock %}
+{% block bodycls %}is-detail{% endblock %}
+{% block sidebar %}{% include "_rules.html" %}{% endblock %}
+{% block body %}
+<a class="back" href="/advisories">{{ icon('back') }}Advisories</a>
+<header class="ihead split">
+  <div><h1 class="title">{{ title }}</h1>
+    <p class="hstate"><span class="cap {{ capcls[res.status] }}">{{ label[res.status] }}</span> <span class="muted">{{ group }}</span></p></div>
+  <nav class="segm" aria-label="Range">{% for k in ranges %}<a href="?range={{ k }}" {% if k == rng %}aria-current="true"{% endif %}>{{ k }}</a>{% endfor %}</nav>
+</header>
+{% if res.raised %}
+<section aria-labelledby="h-raised"><h2 class="sh" id="h-raised">Raised now</h2>
+  <ul class="inset">{% for sev, code, t, note in res.raised %}
+    <li><span class="sev {{ sev }}">{{ icon(sev) }}<span class="sr-only">{{ sev }}</span></span>
+      <div class="lt"><p class="ln">{{ t }}</p><p class="ls">{{ note }}</p></div></li>{% endfor %}</ul>
+</section>
+{% endif %}
+<section aria-labelledby="h-state"><h2 class="sh" id="h-state">Current state, last {{ rng }}</h2>
+  <ul class="inset">{% for it in items %}
+    <li class="state-row"><div class="lt"><p class="ln">{% if it.href %}<a href="{{ it.href }}">{{ it.name }}</a>{% else %}{{ it.name }}{% endif %}</p>
+        {% if it.since %}<p class="ls">In this state {{ it.since }}</p>{% endif %}</div>
+      <div class="state-strip">{% if it.strip %}{{ it.strip|safe }}{% else %}<span class="muted">no history</span>{% endif %}</div>
+      <span class="cap {{ it.cls }}">{{ it.state }}</span></li>{% endfor %}</ul>
+</section>
+<article class="prose adv">{{ html|safe }}</article>
+{% endblock %}

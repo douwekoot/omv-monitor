@@ -1,0 +1,12 @@
+{% from "_ui.html" import icon %}
+<a class="verdict-pill {{ sev }}" href="/advisories"{% if current is none %} aria-current="page"{% endif %}>
+  {{ icon('finding' if sev == 'bad' else 'advisory' if sev == 'warn' else 'ok') }}<span>{{ verdict }}</span></a>
+{% for group, rows in groups %}
+<section class="group" aria-labelledby="g-{{ loop.index }}"><h2 id="g-{{ loop.index }}">{{ group }}</h2>
+  <ul class="rows">{% for rid, title, about in rows %}{% set st = rules[rid].status %}
+    <li><a class="row" href="/advisories/{{ rid }}"{% if current == rid %} aria-current="page"{% endif %}>
+      <span class="dot {{ {'pass': 'good', 'advisory': 'warn', 'finding': 'bad'}[st] }}" aria-hidden="true"></span>
+      <span class="rt"><span class="rn">{{ title }}</span><span class="rs">{{ {'pass': 'passing', 'advisory': 'advisory', 'finding': 'finding'}[st] }}</span></span></a></li>
+  {% endfor %}</ul>
+</section>
+{% endfor %}

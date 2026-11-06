@@ -1,0 +1,81 @@
+# All services use the host network. Prometheus and exporters listen on loopback; the web app listens on the
+# LAN IP (reachable from the LAN and from WireGuard clients that route 192.168.1.0/24).
+# Set APP_ADMIN_PASSWORD and APP_SECRET_KEY in .env (mode 600).
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    network_mode: host
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=${PROM_RETENTION:-7d}
+      - --web.listen-address=127.0.0.1:9090
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-data:/prometheus
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    network_mode: host
+    pid: host
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=127.0.0.1:9100
+      - --collector.textfile.directory=/host/var/lib/node_exporter/textfile
+    volumes:
+      - /:/host:ro,rslave
+
+  blackbox:
+    image: prom/blackbox-exporter:v0.27.0
+    network_mode: host
+    restart: unless-stopped
+    cap_add: [NET_RAW]
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+      - --web.listen-address=127.0.0.1:9115
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+
+  web:
+    build: .
+    network_mode: host
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    depends_on: [prometheus]
+    environment:
+      APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:?set in .env}
+      APP_SECRET_KEY: ${APP_SECRET_KEY:?set in .env}
+      HOME: /tmp  # gunicorn's control socket needs a writable home on the read-only root
+      PROM_URL: http://127.0.0.1:9090
+      APP_WIKI_DIR: /app/wiki
+      APP_SETTINGS_FILE: /app/data/settings.json
+      APP_DEVICES_FILE: /app/config/devices.toml
+      APP_BACKUP_DIR: /app/backups
+      APP_NETCTL_SOCKET: /run/omv-netctl/netctl.sock
+      APP_AUDIT_FILE: /app/data/audit.jsonl
+      APP_TOTP_FILE: /app/data/totp.json
+      APP_DEVICE_NAMES_FILE: /app/data/device_names.json
+      APP_MONITOR_CONFIG: /app/config/monitor.toml
+      APP_BACKUPS_CONFIG: /app/config/backups.toml
+      APP_BACKUP_OVERRIDES_FILE: /app/data/backup-overrides.json
+      APP_ALERT_HISTORY_FILE: /app/data/alert-history.jsonl
+      APP_BACKUP_RUNS_FILE: /app/data/backup-runs.jsonl
+      APP_EXPORT_DIR: /app/exports
+    volumes:
+      - ./certs:/certs:ro
+      - ./wiki:/app/wiki:ro
+      - ./config:/app/config:ro
+      - ./data:/app/data
+      # Host helper socket; the container user needs access via the socket's group (add group_add: ["<gid>"] if the helper uses a non-world gid).
+      - /run/omv-netctl:/run/omv-netctl
+      # Only the non-secret half of host/omv-backup.sh's output; secrets/ stays on the NAS.
+      - /srv/dev-disk-by-uuid-CHANGE-ME/internal/backups/omv-monitor/files:/app/backups:ro
+      # Device backup downloads (host/omv-device-backup.py export). shortcut: follows the default destination_root;
+      # change it here too if destination_root is moved in Settings.
+      - /srv/dev-disk-by-uuid-CHANGE-ME/backups/.exports:/app/exports:ro
+      - /etc/localtime:/etc/localtime:ro  # chart times in the host's timezone, not UTC
+
+volumes:
+  prom-data:

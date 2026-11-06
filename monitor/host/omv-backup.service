@@ -1,0 +1,5 @@
+[Unit]
+Description=Back up omv-monitor state to the NAS
+[Service]
+Type=oneshot
+ExecStart=/opt/omv-monitor/host/omv-backup.sh

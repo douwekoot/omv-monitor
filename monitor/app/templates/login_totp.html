@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Verify · omv-monitor{% endblock %}
+{% block page %}
+<main class="solo">
+<form class="login glass" method="post" action="/login/totp">
+  <h1 class="title">omv-monitor</h1>
+  {% if err %}<p class="banner" role="alert">{{ err }}</p>{% endif %}
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label for="code">Authenticator code or recovery code</label>
+  <input id="code" type="text" name="code" inputmode="numeric" autocomplete="one-time-code" required autofocus>
+  <button class="btn" type="submit">Verify</button>
+</form>
+</main>
+{% endblock %}

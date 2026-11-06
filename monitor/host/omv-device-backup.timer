@@ -1,0 +1,8 @@
+[Unit]
+Description=Check every 15 minutes for due device backups
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Persistent=true
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,16 @@
+{# Authored 16px icons, one 1.5 stroke family, coloured by currentColor. #}
+{% macro icon(name) -%}
+<svg class="ic" viewBox="0 0 16 16" aria-hidden="true">
+{%- if name == 'finding' %}<path d="M8 2.2 14.3 13.3H1.7Z"/><path d="M8 6.4v3.2M8 11.4v.1"/>
+{%- elif name == 'advisory' %}<circle cx="8" cy="8" r="6.2"/><path d="M8 4.8v3.6M8 10.9v.1"/>
+{%- elif name == 'ok' %}<circle cx="8" cy="8" r="6.2"/><path d="m5.2 8.2 1.9 1.9 3.7-4"/>
+{%- elif name == 'back' %}<path d="M10 3.5 5.5 8l4.5 4.5"/>
+{%- elif name == 'gear' %}<circle cx="8" cy="8" r="1.9"/><circle cx="8" cy="8" r="4.3"/><path d="M8 1.6v2.1M8 12.3v2.1M1.6 8h2.1M12.3 8h2.1M3.5 3.5l1.45 1.45M11.05 11.05l1.45 1.45M12.5 3.5l-1.45 1.45M4.95 11.05 3.5 12.5"/>
+{%- endif %}</svg>
+{%- endmacro %}
+{% macro row(href, name, sub, cls, strip, selected) -%}
+<li><a class="row" href="{{ href }}"{% if selected %} aria-current="page"{% endif %}>
+  <span class="dot {{ cls }}" aria-hidden="true"></span>
+  <span class="rt"><span class="rn">{{ name }}</span><span class="rs">{{ sub }}</span></span>
+  <span class="mini">{{ strip|safe }}</span></a></li>
+{%- endmacro %}

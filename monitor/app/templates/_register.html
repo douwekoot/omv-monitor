@@ -1,0 +1,24 @@
+{% from "_ui.html" import icon, row %}
+<a class="verdict-pill {{ sev }}" href="/"{% if current is none %} aria-current="page"{% endif %}>
+  {{ icon('finding' if sev == 'bad' else 'advisory' if sev == 'warn' else 'ok') }}<span>{{ verdict }}</span></a>
+{% if findings %}
+<section class="group att" aria-labelledby="s-att"><h2 id="s-att">Needs attention</h2>
+  <ul class="rows">{% for f in findings %}
+    <li><a class="row" href="{{ f.href or '/#host' }}"><span class="sev {{ f.sev }}">{{ icon(f.sev) }}<span class="sr-only">{{ f.sev }}</span></span>
+      <span class="rt"><span class="rn">{{ f.title }}</span></span></a></li>{% endfor %}</ul>
+</section>
+{% endif %}
+{% macro strip(kind, id) %}{{ strips[kind].get(id, '')|safe }}{% endmacro %}
+{% if 'peers' in panels %}<section class="group" aria-labelledby="s-peers"><h2 id="s-peers">Peers</h2>
+  <ul class="rows">{% for p in peers %}{{ row('/detail/peer/' ~ (p.id|urlid), p.device, p.ago, p.cls, strip('peer', p.id), current == ('peer', p.id)) }}{% else %}<li class="empty">No peers reported.</li>{% endfor %}</ul>
+</section>{% endif %}
+{% if 'checks' in panels %}<section class="group" aria-labelledby="s-checks"><h2 id="s-checks">Checks</h2>
+  <ul class="rows">{% for c in checks %}{{ row('/detail/check/' ~ (c.id|urlid), c.job ~ ' ' ~ c.instance,
+    ('%.1f ms'|format(c.duration_s * 1000) if c.success and c.duration_s is not none else c.state), c.cls, strip('check', c.id), current == ('check', c.id)) }}{% else %}<li class="empty">No checks reported.</li>{% endfor %}</ul>
+</section>{% endif %}
+{% if 'services' in panels %}<section class="group" aria-labelledby="s-svcs"><h2 id="s-svcs">Services</h2>
+  <ul class="rows">{% for s in svcs %}{{ row('/detail/service/' ~ (s.name|urlid), s.label, s.state, s.cls, strip('service', s.name), current == ('service', s.name)) }}{% endfor %}</ul>
+</section>{% endif %}
+{% if 'interfaces' in panels %}<section class="group" aria-labelledby="s-ifs"><h2 id="s-ifs">Interfaces</h2>
+  <ul class="rows">{% for i in ifs %}{{ row('/detail/interface/' ~ (i.device|urlid), i.device, i.state ~ (' · unused' if i.cls == 'idle' else ''), i.cls, strip('interface', i.device), current == ('interface', i.device)) }}{% else %}<li class="empty">No interfaces reported.</li>{% endfor %}</ul>
+</section>{% endif %}

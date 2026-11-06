@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon %}
+{% set active = 'backups' %}
+{% block scripts %}{% endblock %}
+{% block title %}{{ t.label }} · Backups · omv-monitor{% endblock %}
+{% block bodycls %}is-detail{% endblock %}
+{% block sidebar %}{% include "_backups_side.html" %}{% endblock %}
+{% block body %}
+<a class="back" href="/backups">{{ icon('back') }}Backups</a>
+<header class="ihead">
+  <h1 class="large">{{ t.label }}</h1>
+  <p class="hstate"><span class="cap {{ row.cls }}">{{ row.state }}</span>
+    <span class="muted">{{ 'Every ' ~ t.interval_h ~ ' h' if t.enabled else 'Not scheduled' }} · <a href="/wiki/backups#restore">Restore steps</a></span></p>
+</header>
+{% if started %}<p class="inset clear" role="status">Backup started. The result appears under Recent runs when it finishes; reload this page to check.</p>{% endif %}
+{% if saved %}<p class="inset clear" role="status">Backup settings saved.</p>{% endif %}
+{% if error %}<p class="banner" role="alert">{{ error }}</p>{% endif %}
+<section aria-labelledby="h-st"><h2 class="sh" id="h-st">Status</h2>
+  <ul class="inset">
+    <li><span class="ln">Last run</span><span class="lt">{{ row.last_run|when }}{% if row.last_run is not none %} · {{ row.last_run|ago }}{% endif %}{% if reason %}<span class="ls">{{ reason }}</span>{% endif %}</span>
+      {% if row.ok is not none %}<span class="cap {{ 'good' if row.ok else 'bad' }}">{{ 'ok' if row.ok else 'failed' }}</span>{% endif %}</li>
+    <li><span class="ln">Last success</span><span class="lt">{{ row.last_success|when }}{% if row.last_success is not none %} · {{ row.last_success|ago }}{% endif %}</span></li>
+    <li><span class="ln">Size</span><span class="lt">{{ row.size|bytes }}</span></li>
+    <li><span class="ln">Categories</span><span class="lt">{% for c in t.categories %}{{ labels[c] }}{% if not loop.last %}, {% endif %}{% endfor %}</span></li>
+    <li><span class="ln">Repository</span><span class="lt">{{ root }}</span></li>
+  </ul>
+</section>
+<form class="settings" method="post" action="/backups/targets/{{ t.name }}/run">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="acts"><button class="btn" type="submit"{% if not helper %} disabled aria-describedby="run-note"{% endif %}>Run now</button>
+    {% if not helper %}<p class="muted" id="run-note">The host helper is not connected, so a backup cannot be started from here.</p>{% endif %}</div>
+</form>
+<section aria-labelledby="h-dl"><h2 class="sh" id="h-dl">Download</h2>
+  {% if exporting %}<p class="inset clear" role="status">Preparing the download. Reload this page to see when it is ready.</p>{% endif %}
+  {% if snaps %}<form class="settings" method="post" action="/backups/targets/{{ t.name }}/export">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <ul class="inset">
+      <li><label class="ln" for="dl-snap">Snapshot</label>
+        <select id="dl-snap" name="snapshot">{% for s in snaps %}
+          <option value="{{ s.id }}"{% if s.id == snap %} selected{% endif %}>{{ s.time[:16]|replace('T', ' ') }} · {{ s.id }}{% if s.host %} · {{ s.host }}{% endif %}</option>{% endfor %}
+        </select></li>
+      <li><label class="ln" for="dl-path">Folder</label>
+        <input id="dl-path" type="text" name="path" required list="dl-paths" value="{{ path or '' }}" autocomplete="off"
+          aria-describedby="dl-help{% if export_err %} dl-err{% endif %}"{% if export_err %} aria-invalid="true"{% endif %}>
+        <datalist id="dl-paths">{% for p in paths %}<option value="{{ p }}">{% endfor %}</datalist>
+        {% if export_err %}<p class="field-err" id="dl-err" role="alert">{{ export_err }}</p>{% endif %}</li>
+    </ul>
+    <p class="muted" id="dl-help">One folder inside the snapshot{% if paths %}, for example {{ paths[0] }}{% endif %}, or the whole snapshot, as a tar archive. It is deleted about an hour after it is ready.</p>
+    <div class="acts"><button class="pill-btn" type="submit">Prepare download</button>
+      <button class="pill-btn" type="submit" name="full" value="1" formnovalidate>Download whole snapshot</button></div>
+  </form>{% elif snaps_err %}<p class="inset pad muted">{{ snaps_err }}</p>
+  {% else %}<p class="inset pad muted">No snapshots yet.</p>{% endif %}
+  {% if exports %}<ul class="inset">{% for e in exports %}
+    <li><div class="lt">{% if e.state == 'ready' %}<p class="ln"><a href="/backups/exports/{{ e.name }}" download>{{ e.name }}</a></p>{% else %}<p class="ln">{{ e.name }}</p>{% endif %}
+      <p class="ls">{{ e.when }}{% if e.state == 'ready' %} · {{ e.size|bytes }}{% endif %}{% if e.error %} · {{ e.error }}{% endif %}</p></div>
+      <span class="cap {{ {'ready': 'good', 'running': 'warn', 'failed': 'bad'}[e.state] }}">{{ {'ready': 'ready', 'running': 'preparing', 'failed': 'failed'}[e.state] }}</span></li>{% endfor %}
+  </ul>{% endif %}
+</section>
+<section aria-labelledby="h-runs"><h2 class="sh" id="h-runs">Recent runs</h2>
+  {% if runs %}<ul class="inset">{% for r in runs %}
+    <li><div class="lt"><p class="ln">{{ r.ts|when }} · {{ r.step }}</p><p class="ls">{{ r.detail }}</p></div><span class="cap {{ 'good' if r.ok else 'bad' }}">{{ 'ok' if r.ok else 'failed' }}</span></li>{% endfor %}
+  </ul>{% elif row.last_run is not none %}<p class="inset pad muted">No run log on this server yet. The status above comes from the backup metrics.</p>
+  {% else %}<p class="inset pad muted">No runs recorded.</p>{% endif %}
+</section>
+<section aria-labelledby="h-bk-set"><h2 class="sh" id="h-bk-set">Backup settings</h2>
+  {% set n = t.name %}
+  <details class="fold"{% if open_settings %} open{% endif %}>
+    <summary class="pill-btn">Edit schedule, contents and retention</summary>
+    <form class="settings" method="post" action="/settings/backups">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <p class="muted">Saved as overrides. Hosts, user and MAC address stay in config/backups.toml.</p>
+      <ul class="inset">
+        <li><label class="ln" for="f-en-{{ n }}">Enabled</label><input id="f-en-{{ n }}" type="checkbox" name="enabled_{{ n }}" value="1"{% if t.enabled %} checked{% endif %}></li>
+        <li><label class="ln" for="f-iv-{{ n }}">Interval (hours)</label><input id="f-iv-{{ n }}" type="number" name="interval_h_{{ n }}" min="1" max="720" value="{{ t.interval_h }}"></li>
+        {% for k in ('daily', 'weekly', 'monthly') %}<li><label class="ln" for="f-r{{ k }}-{{ n }}">Keep {{ k }}</label><input id="f-r{{ k }}-{{ n }}" type="number" name="retention_{{ k }}_{{ n }}" min="0" value="{{ t.retention[k] }}"></li>
+        {% endfor %}</ul>
+      <ul class="inset">{% for c in categories[t.kind]|sort %}<li><label class="ln" for="f-c-{{ n }}-{{ c }}">{{ labels[c] }}</label>
+          <input id="f-c-{{ n }}-{{ c }}" type="checkbox" name="categories_{{ n }}" value="{{ c }}"{% if c in t.categories %} checked{% endif %}></li>
+        {% endfor %}</ul>
+      <ul class="inset">
+        <li><label class="ln" for="f-in-{{ n }}">Extra paths to include (one per line)</label><textarea id="f-in-{{ n }}" name="include_{{ n }}" rows="3">{{ t.include|join('\n') }}</textarea></li>
+        <li><label class="ln" for="f-ex-{{ n }}">Paths to exclude (one per line)</label><textarea id="f-ex-{{ n }}" name="exclude_{{ n }}" rows="3">{{ t.exclude|join('\n') }}</textarea></li>
+      </ul>
+      <div class="acts"><button class="pill-btn" type="submit">Review changes</button></div>
+    </form>
+  </details>
+</section>
+{% endblock %}

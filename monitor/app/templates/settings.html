@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% set active = 'settings' %}
+{% block title %}Settings · omv-monitor{% endblock %}
+{% from "_ui.html" import row %}
+{% block bodycls %}is-detail{% endblock %}
+{% block sidebar %}<section class="group" aria-labelledby="s-set"><h2 id="s-set">Settings</h2><ul class="rows">
+{{ row('#h-set-view', 'Display', '', '', '', False) }}
+{{ row('#h-set-panels', 'Panels', '', '', '', False) }}
+{{ row('#h-set-th', 'Alert thresholds', '', '', '', False) }}
+{{ row('#h-set-dev', 'Device names', '', '', '', False) }}
+{{ row('#h-set-bk', 'Backups', '', '', '', False) }}
+{% for t in bk.targets %}{{ row('/backups/targets/' ~ t.name ~ '#h-bk-set', t.label, 'enabled' if t.enabled else 'disabled', '', '', False) }}
+{% endfor %}</ul></section>{% endblock %}
+{% block body %}
+<header class="ihead">
+  <h1 class="large">Settings</h1>
+  <p class="sub">How this dashboard looks and when it warns, plus where device backups are stored.
+    Each device's backup schedule and contents are set on its page under <a href="/backups">Backups</a>.</p>
+</header>
+{% if saved %}<p class="inset clear" role="status">Settings saved.</p>{% endif %}
+{% if errors %}<p class="banner" role="alert" id="f-err">Not saved: {{ errors|join('; ') }}</p>{% endif %}
+<form class="settings" id="f-settings" method="post" action="/settings"{% if errors %} aria-describedby="f-err"{% endif %}>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <section aria-labelledby="h-set-view"><h2 class="sh" id="h-set-view">Display</h2>
+    <ul class="inset">
+      <li><label class="ln" for="f-range">Default range</label>
+        <select id="f-range" name="default_range">{% for k in ranges %}<option value="{{ k }}"{% if k == s.default_range %} selected{% endif %}>{{ k }}</option>{% endfor %}</select></li>
+      <li><label class="ln" for="f-refresh">Refresh automatically</label>
+        <select id="f-refresh" name="refresh_s">{% for n in refreshes %}<option value="{{ n }}"{% if n == s.refresh_s %} selected{% endif %}>{{ 'Off' if n == 0 else n ~ ' s' }}</option>{% endfor %}</select></li>
+      <li><label class="ln" for="f-units">Byte units</label>
+        <select id="f-units" name="byte_units">{% for u in units %}<option value="{{ u }}"{% if u == s.byte_units %} selected{% endif %}>{{ u }}</option>{% endfor %}</select></li>
+      <li><label class="ln" for="f-hs">Peer counts as connected for (seconds)</label>
+        <input id="f-hs" type="number" name="handshake_good_s" min="30" max="3600" step="1" value="{{ s.handshake_good_s }}"></li>
+    </ul>
+  </section>
+  <section aria-labelledby="h-set-panels"><h2 class="sh" id="h-set-panels">Panels</h2>
+    <input type="hidden" name="panels" value="">
+    <ul class="inset">{% for p in panel_names %}
+      <li><label class="ln" for="f-p-{{ p }}">{{ p|capitalize }}</label>
+        <input id="f-p-{{ p }}" type="checkbox" name="panels" value="{{ p }}"{% if p in s.panels %} checked{% endif %}></li>{% endfor %}
+    </ul>
+  </section>
+  <section aria-labelledby="h-set-th"><h2 class="sh" id="h-set-th">Alert thresholds</h2>
+    <p class="muted">Leave a field empty to use the default from config/monitor.toml.</p>
+    <ul class="inset">{% for k, label in (('disk_pct', 'Disk usage warning (percent)'), ('handshake_stale_s', 'Handshake stale after (seconds)'), ('backup_age_h', 'Backup overdue after (hours)')) %}
+      <li><label class="ln" for="f-th-{{ k }}">{{ label }}</label>
+        <input id="f-th-{{ k }}" type="number" name="{{ k }}" step="1" placeholder="{{ th_defaults[k] }}" value="{{ s.thresholds.get(k, '') }}"></li>{% endfor %}
+    </ul>
+    <button class="pill-btn" type="submit" form="f-settings" name="reset_thresholds" value="1">Reset thresholds</button>
+  </section>
+  <button class="btn" type="submit">Save settings</button>
+</form>
+<section aria-labelledby="h-set-dev"><h2 class="sh" id="h-set-dev">Device names</h2>
+  {% if peers %}<ul class="inset">{% for p in peers %}
+    <li><form class="settings" method="post" action="/settings/devices">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="public_key" value="{{ p.id }}">
+      <label class="ln" for="f-dev-{{ p.id }}">{{ p.device or 'n/a' }} <span class="ls">{{ p.id }}</span></label>
+      <input id="f-dev-{{ p.id }}" type="text" name="name" maxlength="40" value="{{ p.device }}">
+      <button class="pill-btn" type="submit">Rename</button></form></li>{% endfor %}
+  </ul>{% else %}<p class="inset pad muted">n/a</p>{% endif %}
+</section>
+<form class="settings" method="post" action="/settings/backups">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <section aria-labelledby="h-set-bk"><h2 class="sh" id="h-set-bk">Backups</h2>
+    <p class="muted">Saved as an override; every target keeps its repository below this folder.</p>
+    <ul class="inset"><li><label class="ln" for="f-bk-root">Destination root</label>
+      <input id="f-bk-root" type="text" name="destination_root" value="{{ bk.destination_root }}"></li>
+      {% for t in bk.targets %}<li><span class="ln"><a href="/backups/targets/{{ t.name }}#h-bk-set">{{ t.label }}</a></span><span class="ls">every {{ t.interval_h }} h{% if not t.enabled %} · disabled{% endif %}</span></li>{% endfor %}</ul>
+    <div class="acts"><button class="pill-btn" type="submit">Review destination change</button></div>
+  </section>
+</form>
+{% endblock %}

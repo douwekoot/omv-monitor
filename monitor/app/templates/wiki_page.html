@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon %}
+{% set active = 'wiki' %}
+{% block title %}{{ title }} · omv-monitor{% endblock %}
+{% block bodycls %}{{ 'is-overview' if slug == 'index' else 'is-detail' }}{% endblock %}
+{% block sidebar %}
+<ul class="rows"><li><a class="row" href="/wiki"{% if slug == 'index' %} aria-current="page"{% endif %}><span class="rt"><span class="rn">Overview</span></span></a></li></ul>
+{% for name, rows in sections %}
+<section class="group" aria-labelledby="w-{{ loop.index }}"><h2 id="w-{{ loop.index }}">{{ name }}</h2>
+  <ul class="rows">{% for s, t, about in rows %}<li><a class="row" href="/wiki/{{ s }}"{% if s == slug %} aria-current="page"{% endif %}>
+    <span class="rt"><span class="rn">{{ t }}</span></span></a></li>{% endfor %}</ul>
+</section>
+{% endfor %}
+{% endblock %}
+{% block body %}
+{% if slug != 'index' %}<a class="back" href="/wiki">{{ icon('back') }}Wiki</a>{% endif %}
+<div class="doc{% if toc|length > 1 %} has-toc{% endif %}">
+  <article class="prose">
+    <h1>{{ title }}</h1>
+    {% if slug != 'index' %}
+    <dl class="summary"><div><dt>About</dt><dd>{{ about or '—' }}</dd></div><div><dt>Section</dt><dd>{{ section or 'Other' }}</dd></div><div><dt>Updated</dt><dd>{{ updated }}</dd></div></dl>
+    {% endif %}
+    {{ html|safe }}
+    {% if slug == 'index' %}
+    {% for name, rows in sections %}
+    <h2>{{ name }}</h2>
+    <ul class="inset pages">{% for s, t, about in rows %}<li><div class="lt"><p class="ln"><a href="/wiki/{{ s }}">{{ t }}</a></p><p class="ls">{{ about }}</p></div></li>{% endfor %}</ul>
+    {% endfor %}
+    {% endif %}
+  </article>
+  {% if toc|length > 1 %}
+  <nav class="toc" aria-label="On this page"><p class="toc-h">On this page</p>
+    <ul>{% for anchor, text in toc %}<li><a href="#{{ anchor }}">{{ text }}</a></li>{% endfor %}</ul></nav>
+  {% endif %}
+</div>
+{% endblock %}

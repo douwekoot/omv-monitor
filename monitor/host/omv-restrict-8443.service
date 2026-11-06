@@ -1,0 +1,14 @@
+[Unit]
+Description=Limit the OMV monitor (TCP 8443) to trusted clients
+After=openmediavault-firewall.service
+# Re-apply when OMV rebuilds its firewall
+PartOf=openmediavault-firewall.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/omv-restrict-8443 apply
+ExecStop=/usr/local/sbin/omv-restrict-8443 revert
+
+[Install]
+WantedBy=multi-user.target

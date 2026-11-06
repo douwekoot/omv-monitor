@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon %}
+{% set active = 'dashboard' %}
+{% block title %}{{ title }} · omv-monitor{% endblock %}
+{% block bodycls %}is-detail{% endblock %}
+{% block sidebar %}{% include "_register.html" %}{% endblock %}
+{% block body %}
+<a class="back" href="/">{{ icon('back') }}Overview</a>
+<header class="ihead split">
+  <div><h1 class="title">{{ title }}</h1>
+    <p class="hstate">{% if state %}<span class="cap {{ cls }}">{{ state }}</span> {% endif %}<span class="muted">{{ kind|capitalize }}</span></p></div>
+  <nav class="segm" aria-label="Range">{% for k in ranges %}<a href="?range={{ k }}" {% if k == rng %}aria-current="true"{% endif %}>{{ k }}</a>{% endfor %}</nav>
+</header>
+<section aria-labelledby="h-strip"><h2 class="sh" id="h-strip">{{ strip_word|capitalize }}, last {{ rng }}</h2>
+  <div class="inset pad">{% if strip %}<div class="strip-lg">{{ strip|safe }}</div><div class="axis"><span>{{ rng }} ago</span><span>now</span></div>
+  {% else %}<p class="muted">No state data in this range.</p>{% endif %}</div>
+</section>
+{% for name, svg in charts %}
+<section aria-labelledby="h-c{{ loop.index }}"><div class="shrow"><h2 class="sh" id="h-c{{ loop.index }}">{{ name }}</h2><span class="muted">same scale for every {{ kind }}</span></div>
+  <div class="inset pad">{{ svg|safe }}</div>
+</section>
+{% endfor %}
+{% if info %}
+<section aria-labelledby="h-info"><h2 class="sh" id="h-info">Details</h2>
+  <dl class="inset kv">{% for k, v in info %}<div><dt>{{ k }}</dt><dd>{{ v }}</dd></div>{% endfor %}</dl>
+</section>
+{% endif %}
+{% endblock %}

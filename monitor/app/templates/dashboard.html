@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon %}
+{% set active = 'dashboard' %}
+{% block title %}{{ verdict }} · omv-monitor{% endblock %}
+{% block bodycls %}is-overview{% endblock %}
+{% block sidebar %}{% include "_register.html" %}{% endblock %}
+{% block body %}
+<header class="ihead split">
+  <div>
+    <h1 class="large {{ sev }}">{{ verdict }}</h1>
+    <p class="sub">Inspected at {{ updated }} · <a href="">Refresh</a></p>
+  </div>
+  </header>
+{% set ns = namespace(hg=0, hb=0) %}{% for h in host %}{% if h[3] == 'good' %}{% set ns.hg = ns.hg + 1 %}{% elif h[3] == 'bad' %}{% set ns.hb = ns.hb + 1 %}{% endif %}{% endfor %}
+{% macro cell(label, good, total, word, bad) -%}
+<li><span class="gk">{{ label }}</span>
+  <span class="gv"><span class="gd {{ 'ok' if good == total and total else 'no' if bad }}" aria-hidden="true"></span>{{ good }} of {{ total }}</span>
+  <span class="gs">{{ word }}</span></li>
+{%- endmacro %}
+<ul class="inset glance" aria-label="Summary">
+  {{ cell('Peers', peers|selectattr('cls', 'eq', 'good')|list|length, peers|length, 'connected', peers|selectattr('cls', 'eq', 'bad')|list|length) }}
+  {{ cell('Services', svcs|selectattr('cls', 'eq', 'good')|list|length, svcs|length, 'running', svcs|selectattr('cls', 'eq', 'bad')|list|length) }}
+  {{ cell('Checks', checks|selectattr('cls', 'eq', 'good')|list|length, checks|length, 'passing', checks|selectattr('cls', 'eq', 'bad')|list|length) }}
+  {{ cell('Host posture', ns.hg, host|length, 'in order', ns.hb) }}
+</ul>
+{% if findings %}
+<section aria-labelledby="h-att"><h2 class="sh" id="h-att">Needs attention</h2>
+  <ul class="inset">{% for f in findings %}
+    <li><span class="sev {{ f.sev }}">{{ icon(f.sev) }}<span class="sr-only">{{ f.sev }}</span></span>
+      <div class="lt"><p class="ln">{% if f.href %}<a href="{{ f.href }}">{{ f.title }}</a>{% else %}{{ f.title }}{% endif %}</p><p class="ls">{{ f.note }}</p></div></li>
+  {% endfor %}</ul>
+</section>
+{% else %}
+<p class="inset clear">{{ icon('ok') }} Nothing needs attention.</p>
+{% endif %}
+{% if chart %}<section aria-labelledby="h-traffic">
+  <div class="shrow"><h2 class="sh" id="h-traffic">Traffic on wgnet1</h2>
+    <nav class="segm" aria-label="Traffic range">{% for k in ranges %}<a href="/?range={{ k }}" {% if k == rng %}aria-current="true"{% endif %}>{{ k }}</a>{% endfor %}</nav></div>
+  <div class="inset pad">{{ chart|safe }}</div>
+</section>{% endif %}
+{% set bad_svcs = svcs|rejectattr('cls', 'eq', 'good')|list %}{% set bad_checks = checks|rejectattr('cls', 'eq', 'good')|list %}
+<section aria-labelledby="h-sc"><h2 class="sh" id="h-sc">Services and checks</h2>
+  {% if bad_svcs or bad_checks %}<ul class="inset">
+    {% for sv in bad_svcs %}<li><a class="ln" href="/detail/service/{{ sv.name|urlid }}">{{ sv.label }}</a><span class="cap {{ sv.cls }}">{{ sv.state }}</span></li>{% endfor %}
+    {% for c in bad_checks %}<li><a class="ln" href="/detail/check/{{ c.id|urlid }}">{{ c.job }} {{ c.instance }}</a><span class="cap {{ c.cls }}">{{ c.state }}</span></li>{% endfor %}
+  </ul>{% elif svcs or checks %}<p class="inset clear">{{ icon('ok') }} All {{ svcs|length }} services running, all {{ checks|length }} checks passing.</p>
+  {% else %}<p class="inset pad muted">n/a</p>{% endif %}
+</section>
+{% if 'disks' in panels %}<section aria-labelledby="h-disks"><h2 class="sh" id="h-disks">Disks</h2>
+  {% if disks %}<ul class="inset">{% for d in disks %}<li><span class="ln">{{ d.device }}</span><span class="cap {{ d.cls }}">{{ d.state }}</span></li>{% endfor %}</ul>
+  {% else %}<p class="inset pad muted">n/a</p>{% endif %}
+</section>{% endif %}
+{% if 'containers' in panels %}<section aria-labelledby="h-containers"><h2 class="sh" id="h-containers">Containers</h2>
+  {% if containers %}<ul class="inset">{% for c in containers %}<li><span class="ln">{{ c.name }}</span><span class="cap {{ c.cls }}">{{ c.state }}</span></li>{% endfor %}</ul>
+  {% else %}<p class="inset pad muted">n/a</p>{% endif %}
+</section>{% endif %}
+<section aria-labelledby="h-backup"><h2 class="sh" id="h-backup">Last NAS backup</h2>
+  {% if backup %}<p class="inset pad">{{ backup[0] }} · {{ backup[1] }}</p>{% else %}<p class="inset pad muted">n/a</p>{% endif %}
+</section>
+{% if 'backups' in panels %}<section aria-labelledby="h-bt"><h2 class="sh" id="h-bt">Device backups</h2>
+  {% if brows %}<ul class="inset">{% for b in brows %}
+    <li><div class="lt"><p class="ln"><a href="/backups/targets/{{ b.name }}">{{ b.label }}</a></p><p class="ls">{% if b.state == 'disabled' %}Not scheduled{% else %}Last success {{ b.ago }}{% if b.size is not none %} · {{ b.size|bytes }}{% endif %}{% endif %}</p></div><span class="cap {{ b.cls }}">{{ b.state }}</span></li>{% endfor %}</ul>
+  {% else %}<p class="inset pad muted">n/a</p>{% endif %}
+</section>{% endif %}
+{% if 'updates' in panels %}<section aria-labelledby="h-upd"><h2 class="sh" id="h-upd">Updates</h2>
+  {% set pend = updates.pending if updates else None %}{% set rb = updates.reboot if updates else None %}
+  <ul class="inset">
+    <li><span class="ln">Pending upgrades</span><span class="cap {{ 'warn' if pend is none else 'idle' if pend else 'good' }}">{{ 'n/a' if pend is none else pend }}</span></li>
+    <li><span class="ln">Reboot</span><span class="cap {{ 'warn' if rb is none else 'idle' if rb else 'good' }}">{{ 'n/a' if rb is none else 'required' if rb else 'not needed' }}</span></li>
+  </ul>
+</section>{% endif %}
+<section id="host" aria-labelledby="h-host"><h2 class="sh" id="h-host">Host posture</h2>
+  <ul class="inset">{% for code, label, text, cls, f, rid in host %}
+    <li><div class="lt"><p class="ln"><a href="/advisories/{{ rid }}">{{ label }}</a></p></div><span class="cap {{ cls }}">{{ text }}</span></li>{% endfor %}</ul>
+</section>
+{% endblock %}

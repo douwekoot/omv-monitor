@@ -1,0 +1,5 @@
+[Unit]
+Description=Write SMART, container and certificate metrics for node_exporter
+[Service]
+Type=oneshot
+ExecStart=/opt/omv-monitor/host/omv-host-metrics.sh

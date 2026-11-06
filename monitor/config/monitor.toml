@@ -1,0 +1,38 @@
+# Alert thresholds (defaults; editable overrides live in the settings JSON) and retention.
+[thresholds]
+disk_pct = 85
+handshake_stale_s = 604800
+backup_age_h = 36
+
+[retention]
+alert_history_days = 90
+prometheus = "7d"
+
+# Services checked by the host metrics script (systemctl is-active, or a running Docker
+# container of that name) and shown on the dashboard. restart = true lets the Network page
+# restart it through the root helper (systemctl restart <unit>). WireGuard and the monitor
+# itself are always restartable and are not listed here.
+[[services]]
+unit = "smbd"
+label = "Samba"
+restart = true
+
+[[services]]
+unit = "minidlna"
+label = "MiniDLNA"
+restart = true
+
+[[services]]
+unit = "nginx"
+label = "nginx"
+restart = true
+
+[[services]]
+unit = "tailscaled"
+label = "tailscaled"
+restart = true
+
+[[services]]
+unit = "ssh"
+label = "SSH"
+restart = false

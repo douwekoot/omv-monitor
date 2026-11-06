@@ -1,0 +1,10 @@
+.idea/
+__pycache__/
+.pytest_cache/
+.env
+certs/
+.venv/
+.impeccable/
+monitor/config/settings.json
+monitor/data/totp.json
+monitor/config/audit.jsonl

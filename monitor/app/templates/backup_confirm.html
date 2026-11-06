@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% set active = 'backups' %}
+{% block scripts %}{% endblock %}
+{% block title %}{{ title }} · omv-monitor{% endblock %}
+{% block bodycls %}is-detail{% endblock %}
+{% block sidebar %}{% include "_backups_side.html" %}{% endblock %}
+{% block body %}
+<header class="ihead">
+  <h1 class="large">{{ title }}</h1>
+  {% for l in lines %}<p class="sub">{{ l }}</p>{% endfor %}
+</header>
+{% if error %}<p class="banner" role="alert">{{ error }}</p>{% endif %}
+{% if rows %}<section aria-labelledby="h-diff"><h2 class="sh" id="h-diff">What will change</h2>
+  <ul class="inset">{% for label, old, new in rows %}
+    <li><span class="ln">{{ label }}</span><span class="lt">{{ old }} &rarr; {{ new }}</span></li>{% endfor %}
+  </ul>
+</section>{% endif %}
+<form class="settings" method="post" action="{{ action }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% for k, v in fields %}<input type="hidden" name="{{ k }}" value="{{ v }}">
+  {% endfor %}{% if cats %}<ul class="inset">{% for value, label, on in cats %}
+    <li><label class="ln" for="c-{{ value }}">{{ label }}</label>
+      <input id="c-{{ value }}" type="checkbox" name="categories" value="{{ value }}"{% if on %} checked{% endif %}></li>{% endfor %}
+  </ul>{% endif %}
+  <input type="hidden" name="confirm" value="1">
+  <div class="acts"><button class="btn" type="submit">{{ button }}</button>
+    <a class="pill-btn" href="{{ cancel }}">Cancel</a></div>
+</form>
+{% endblock %}

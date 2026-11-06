@@ -1,0 +1,5 @@
+[Unit]
+Description=Run device backup of %i now
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/omv-monitor/host/omv-device-backup.py run %i

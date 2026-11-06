@@ -1,0 +1,6 @@
+{% from "_ui.html" import row %}
+<section class="group" aria-labelledby="s-targets"><h2 id="s-targets">Device backups</h2><ul class="rows">
+  {%- for b in brows %}{{ row('/backups/targets/' ~ b.name, b.label, b.ago if b.state == 'ok' else b.state, b.cls, '', bcurrent == b.name) }}
+  {%- else %}<li class="empty">No targets.</li>{% endfor %}</ul></section>
+<section class="group" aria-labelledby="s-kinds"><h2 id="s-kinds">Archives</h2><ul class="rows">
+  {%- for kind in kinds %}{{ row('/backups#h-bk-' ~ kind, kind|capitalize, '', '', '', False) }}{% endfor %}</ul></section>

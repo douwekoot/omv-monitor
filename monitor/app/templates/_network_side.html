@@ -1,0 +1,7 @@
+{% from "_ui.html" import row %}
+<section class="group" aria-labelledby="s-peers"><h2 id="s-peers">Peers</h2><ul class="rows">
+  {%- for p in peers or [] %}{{ row('/network/peer/' ~ (p.public_key|urlid), p.name, p.allowed_ips|join(', ') or ('enabled' if p.enabled else 'disabled'), 'good' if p.enabled else 'idle', '', p.public_key == pcurrent) }}
+  {%- else %}<li class="empty">{{ 'No peers.' if peers is not none else 'n/a' }}</li>{% endfor %}</ul></section>
+<section class="group" aria-labelledby="s-svcs"><h2 id="s-svcs">Services</h2><ul class="rows">
+  {%- for s in services %}{{ row('/network#h-net-svc', s.label, s.state, {'running': 'good', 'stopped': 'bad'}.get(s.state, 'idle'), '', False) }}
+  {%- else %}<li class="empty">n/a</li>{% endfor %}</ul></section>

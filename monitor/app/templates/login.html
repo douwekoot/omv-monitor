@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Sign in · omv-monitor{% endblock %}
+{% block page %}
+<main class="solo">
+<form class="login glass" method="post" action="/login">
+  <h1 class="title">omv-monitor</h1>
+  {% if err %}<p class="banner" role="alert">{{ err }}</p>{% endif %}
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label for="pw">Admin password</label>
+  <input id="pw" type="password" name="password" autocomplete="current-password" required autofocus>
+  <button class="btn" type="submit">Sign in</button>
+</form>
+</main>
+{% endblock %}

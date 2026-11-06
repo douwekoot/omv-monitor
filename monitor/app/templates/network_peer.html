@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% set active = 'network' %}
+{% block scripts %}{% endblock %}
+{% from "_ui.html" import icon %}
+{% block title %}{{ name }} · omv-monitor{% endblock %}
+{% block bodycls %}is-detail{% endblock %}
+{% block sidebar %}{% include "_network_side.html" %}{% endblock %}
+{% block body %}
+<a class="back" href="/network">{{ icon('back') }}Network</a>
+<header class="ihead">
+  <h1 class="large">{{ name }}</h1>
+  <p class="sub">WireGuard peer <code>{{ p.public_key }}</code>, {{ 'enabled' if p.enabled else 'disabled' }}.
+    <a href="/network">Back to Network</a></p>
+</header>
+<section aria-labelledby="h-p-name"><h2 class="sh" id="h-p-name">Name</h2>
+  <form class="netform" method="post" action="/network/peer/rename">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="public_key" value="{{ p.public_key }}">
+    <label for="f-name">Name shown in this app</label>
+    <input id="f-name" type="text" name="name" value="{{ name }}" maxlength="40" required>
+    <button class="pill-btn" type="submit">Rename</button></form>
+</section>
+<section aria-labelledby="h-p-ips"><h2 class="sh" id="h-p-ips">Allowed IPs</h2>
+  <form class="netform" method="post" action="/network/peer/allowed-ips">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="public_key" value="{{ p.public_key }}">
+    <label for="f-ips">Comma or space separated</label>
+    <input id="f-ips" type="text" name="allowed_ips" value="{{ ips }}" required>
+    <button class="pill-btn" type="submit">Change allowed IPs</button></form>
+</section>
+<section aria-labelledby="h-p-on"><h2 class="sh" id="h-p-on">Access</h2>
+  <form class="netform" method="post" action="/network/peer/{{ 'disable' if p.enabled else 'enable' }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="public_key" value="{{ p.public_key }}">
+    <button class="pill-btn" type="submit">{{ 'Disable' if p.enabled else 'Enable' }} this peer</button></form>
+</section>
+{% endblock %}

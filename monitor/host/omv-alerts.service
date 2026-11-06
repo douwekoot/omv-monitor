@@ -1,0 +1,7 @@
+[Unit]
+Description=Email an alert when a new monitor finding appears
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/omv-monitor/alerts.env
+StateDirectory=omv-alerts
+ExecStart=/usr/bin/python3 /opt/omv-monitor/host/omv-alerts.py

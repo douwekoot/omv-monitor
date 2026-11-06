@@ -1,0 +1,8 @@
+.env
+certs/
+__pycache__/
+*.pyc
+prometheus/
+blackbox/
+host/
+compose.yaml

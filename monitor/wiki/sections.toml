@@ -1,0 +1,13 @@
+# Wiki sidebar: sections in order, the pages in each, and a one-line description per page.
+# Pages that are not listed here appear under "Other".
+
+[[section]]
+name = "Operations"
+pages = ["monitoring", "alerts", "backups", "network-actions", "recovery"]
+
+[about]
+monitoring = "Monitoring stack"
+alerts = "Email alerts and SMTP setup"
+backups = "Targets, restore steps, setup checklist"
+network-actions = "Restart services, edit peers, undo, backup Run now"
+recovery = "Emergency procedure"

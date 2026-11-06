@@ -1,0 +1,4 @@
+# WireGuard allowed_ips -> device name shown in the app
+[devices]
+"10.8.0.2/32" = "Laptop"
+"10.8.0.1/32" = "Phone"

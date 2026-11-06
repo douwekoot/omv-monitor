@@ -1,0 +1,48 @@
+{% from "_ui.html" import icon %}<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}omv-monitor{% endblock %}</title>
+<link rel="preload" href="{{ url_for('static', filename='fonts/inter-400.woff2') }}" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="{{ url_for('static', filename='fonts/inter-600.woff2') }}" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+{% block scripts %}<script src="{{ url_for('static', filename='chart.js') }}" defer></script>{% endblock %}</head>
+<body class="{% block bodycls %}{% endblock %}">
+{% block page %}
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar glass">
+  <a class="brand" href="/">omv-monitor</a>
+  <nav class="seg" aria-label="Main">
+    <a href="/" {% if active == 'dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+    <a href="/advisories" {% if active == 'advisories' %}aria-current="page"{% endif %}>Advisories</a>
+    <a href="/alerts" {% if active == 'alerts' %}aria-current="page"{% endif %}>Alerts</a>
+    <a href="/network" {% if active == 'network' %}aria-current="page"{% endif %}>Network</a>
+    <a href="/backups" {% if active == 'backups' %}aria-current="page"{% endif %}>Backups</a>
+    <a href="/wiki" {% if active == 'wiki' %}aria-current="page"{% endif %}>Wiki</a>
+  </nav>
+  <a class="pill-btn icon-btn" href="/settings" aria-label="Settings"{% if active == 'settings' %} aria-current="page"{% endif %}>{{ icon('gear') }}</a>
+  <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="pill-btn" type="submit">Log out</button></form>
+</header>
+<div class="app">
+  <aside class="side glass" aria-label="Sidebar">
+    <div class="side-top">
+      <a class="brand" href="/">omv-monitor</a>
+      <span class="side-acts"><a class="pill-btn icon-btn" href="/settings" aria-label="Settings"{% if active == 'settings' %} aria-current="page"{% endif %}>{{ icon('gear') }}</a>
+      <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="pill-btn" type="submit">Log out</button></form></span>
+    </div>
+    <nav class="seg" aria-label="Main">
+      <a href="/" {% if active == 'dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+      <a href="/advisories" {% if active == 'advisories' %}aria-current="page"{% endif %}>Advisories</a>
+      <a href="/alerts" {% if active == 'alerts' %}aria-current="page"{% endif %}>Alerts</a>
+      <a href="/network" {% if active == 'network' %}aria-current="page"{% endif %}>Network</a>
+      <a href="/backups" {% if active == 'backups' %}aria-current="page"{% endif %}>Backups</a>
+      <a href="/wiki" {% if active == 'wiki' %}aria-current="page"{% endif %}>Wiki</a>
+    </nav>
+    <div class="side-list">{% block sidebar %}{% endblock %}</div>
+    <div class="side-foot">{% block sidebar_foot %}{% endblock %}</div>
+  </aside>
+  <main class="inspector glass" id="main" tabindex="-1">
+    {% if unavailable %}<p class="banner" role="status">Prometheus data unavailable. Showing what could be loaded.</p>{% endif %}
+    {% block body %}{% endblock %}
+  </main>
+</div>
+{% endblock %}
+</body></html>

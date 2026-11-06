@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "_ui.html" import icon, row %}
+{% set active = 'alerts' %}
+{% block scripts %}{% endblock %}
+{% block title %}Alerts · omv-monitor{% endblock %}
+{% block bodycls %}is-detail{% endblock %}
+{% block sidebar %}
+<section class="group" aria-labelledby="s-filter"><h2 id="s-filter">Show</h2><ul class="rows">
+{{ row('/alerts', 'All', '', '', '', not sev) }}
+{{ row('/alerts?sev=finding', 'Findings', '', 'bad', '', sev == 'finding') }}
+{{ row('/alerts?sev=advisory', 'Advisories', '', 'idle', '', sev == 'advisory') }}</ul></section>
+<section class="group" aria-labelledby="s-recent"><h2 id="s-recent">Recent</h2><ul class="rows">
+  {%- for e in events[:5] %}{{ row('/advisories/' ~ (e.rule|urlid) if e.rule else '/alerts', e.title, (e.ts|when) ~ ' · ' ~ e.event, 'bad' if e.sev == 'finding' else 'idle', '', False) }}
+  {%- else %}<li class="empty">No alerts yet.</li>{% endfor %}</ul></section>
+{% endblock %}
+{% block body %}
+<header class="ihead">
+  <h1 class="large">Alert history</h1>
+  <p class="sub">When findings and advisories were raised and cleared, newest first.
+</p>
+  <nav class="segm" aria-label="Filter"><a href="/alerts"{% if not sev %} aria-current="true"{% endif %}>All</a><a href="/alerts?sev=finding"{% if sev == 'finding' %} aria-current="true"{% endif %}>Findings</a><a href="/alerts?sev=advisory"{% if sev == 'advisory' %} aria-current="true"{% endif %}>Advisories</a></nav>
+</header>
+{% if events %}<ul class="inset">{% for e in events %}
+  <li><span class="sev {{ e.sev }}">{{ icon(e.sev) }}<span class="sr-only">{{ e.sev }}</span></span>
+    <div class="lt"><p class="ln">{% if e.rule %}<a href="/advisories/{{ e.rule|urlid }}">{{ e.title }}</a>{% else %}{{ e.title }}{% endif %}</p>
+      <p class="ls">{{ e.ts|when }} · {{ e.event }}</p></div></li>{% endfor %}
+</ul>
+{% else %}<p class="inset pad muted">No alerts yet{% if sev %} for this filter{% endif %}. The alert timer on the host records them here.</p>{% endif %}
+{% endblock %}
