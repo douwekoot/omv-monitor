@@ -9,6 +9,7 @@ DeviceBackup(cfg, runner, clock=time.time, sleep=time.sleep, send_wol=None, ismo
 import fcntl
 import importlib.util
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -333,3 +334,56 @@ def test_compose_excludes_secrets(tmp_path, monkeypatch):
     argv = next(a for a, _ in f.calls if a[0] == "restic" and "--tag" in a)
     ex = [argv[i + 1] for i, a in enumerate(argv) if a == "--exclude"]
     assert "/opt/omv-monitor/secrets" in ex and "/opt/**/secrets" in ex
+
+
+PRIVATE_STAGE = re.compile(r"umask 0?77|mkdir -m 0?700|install -d -m 0?700")
+
+
+def test_local_staging_dir_is_private(tmp_path):
+    f = Fake()
+    e = Env(tmp_path, [target("omv", "local", categories=["omv-config"])], f)
+    e.b.run_target("omv")
+    script = next(a[-1] for a, _ in f.calls if a[:2] == ["sh", "-c"] and "confdb" in a[-1])
+    assert PRIVATE_STAGE.search(script)  # confdb dump holds password hashes
+
+
+def test_device_staging_dir_is_private(tmp_path):
+    f = Fake(up={"pc.lan"})
+    e = Env(tmp_path, [target("pc", categories=["packages", "gnome-settings"])], f)
+    e.b.run_target("pc")
+    assert any(PRIVATE_STAGE.search(j) for j in f.joined() if "mkdir" in j)
+
+
+def test_dump_file_is_created_private(tmp_path, monkeypatch):
+    import os
+    import types
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: types.SimpleNamespace(returncode=0, stderr=b""))
+    old = os.umask(0o022)
+    try:
+        out = tmp_path / "x.tar.part"
+        load().Runner().dump(["true"], out)
+    finally:
+        os.umask(old)
+    assert out.stat().st_mode & 0o077 == 0
+
+
+class DumpFake(Fake):
+    def dump(self, argv, path):
+        self.calls.append((list(argv), None))
+        Path(path).write_bytes(b"tar")
+        return 0, ""
+
+
+@pytest.mark.parametrize("snapshot,path", [
+    ("--password-command=id", "/etc"), ("-o", "/etc"), ("latest", "--option=x"), ("abc123", "etc"), ("abc 123", "/etc")])
+def test_export_rejects_option_like_snapshot_or_path(tmp_path, monkeypatch, snapshot, path):
+    import os
+    monkeypatch.setattr(os, "chown", lambda *a, **k: None)
+    f = DumpFake()
+    e = Env(tmp_path, [target("omv", "local")], f, dest=str(tmp_path / "nas"))
+    (tmp_path / "nas").mkdir()
+    try:
+        e.b.export("omv", snapshot, path)
+    except ValueError:
+        pass
+    assert not f.has("dump")

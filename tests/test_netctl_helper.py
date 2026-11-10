@@ -230,9 +230,15 @@ def server(tmp_path, monkeypatch):
     t = threading.Thread(target=lambda: mod.main(argv), daemon=True)
     t.start()
     for _ in range(200):
-        if sock.exists():
+        # The file appears at bind(), before listen(): wait until it really accepts.
+        probe = socket.socket(socket.AF_UNIX)
+        try:
+            probe.connect(str(sock))
             break
-        time.sleep(0.02)
+        except OSError:
+            time.sleep(0.02)
+        finally:
+            probe.close()
     assert sock.exists()
     return sock, runner
 
@@ -348,7 +354,7 @@ def test_failing_undo_is_kept_logged_and_retried(tmp_path):
     state = tmp_path / "state"
     runner, clock = FlakyRunner(), Clock()
     h = mod.Helper(runner, state, clock=clock)
-    h._begin("dummy", "s", ["wg", "set", "x"])
+    h._begin("dummy", "s", ["wg", "set", "wgnet1", "peer", "X", "remove"])
     clock.t += 61
     h.expire()  # must not raise
     assert (state / "pending.json").exists() and h.pending
@@ -365,7 +371,7 @@ def test_failing_undo_on_start_and_manual_revert(tmp_path):
     mod = load()
     state = tmp_path / "state"
     runner, clock = FlakyRunner(), Clock()
-    mod.Helper(runner, state, clock=clock)._begin("dummy", "s", ["wg", "set", "x"])
+    mod.Helper(runner, state, clock=clock)._begin("dummy", "s", ["wg", "set", "wgnet1", "peer", "X", "remove"])
     h = mod.Helper(runner, state, clock=clock)  # restart with failing undo must not raise
     assert (state / "pending.json").exists()
     pid = h.pending["id"]
@@ -431,3 +437,186 @@ def test_backup_targets_lists_allowlist(bk):
     t = helper.handle({"action": "backup-targets"})["result"]["targets"]
     assert t["pc"] == sorted({"home", "system-settings", "gnome-settings", "packages", "users", "full-system"})
     assert t["omv"] == sorted({"omv-config", "host-config", "compose", "monitor-data", "nas-data"})
+
+
+# --- privilege-boundary audit (T3) -----------------------------------------
+
+def test_deeply_nested_json_does_not_kill_server(server):
+    sock, runner = server
+    r = ask(sock, b"[" * 30000 + b"\n")
+    assert r["ok"] is False and runner.calls == []
+    assert ask(sock, {"action": "pending"})["ok"] is True
+
+
+@pytest.mark.parametrize("payload", [b"\n", b"", b'{"action":"pending"}'])  # empty line, empty, no newline
+def test_socket_degenerate_requests_keep_server_alive(server, payload):
+    sock, runner = server
+    c = socket.socket(socket.AF_UNIX)
+    c.settimeout(5)
+    c.connect(str(sock))
+    c.sendall(payload)
+    c.shutdown(socket.SHUT_WR)
+    try:
+        c.recv(65536)
+    except OSError:
+        pass
+    c.close()
+    assert runner.calls == []
+    assert ask(sock, {"action": "pending"})["ok"] is True
+
+
+def test_socket_not_reachable_by_others(tmp_path, monkeypatch):
+    import os
+    mod = load()
+    monkeypatch.setattr(mod, "Runner", FakeRunner)
+    monkeypatch.setenv("OMV_NETCTL_GID", str(os.getgid()))
+    sock = tmp_path / "run" / "netctl.sock"
+    argv = ["serve", "--socket", str(sock), "--state", str(tmp_path / "state")]
+    threading.Thread(target=lambda: mod.main(argv), daemon=True).start()
+    for _ in range(200):
+        if sock.exists():
+            break
+        time.sleep(0.02)
+    assert sock.stat().st_mode & 0o007 == 0
+    assert sock.parent.stat().st_mode & 0o007 == 0
+    assert sock.stat().st_gid == os.getgid()
+
+
+def test_pending_json_symlink_not_followed(tmp_path):
+    mod = load()
+    state, victim = tmp_path / "state", tmp_path / "victim"
+    victim.write_text("precious")
+    state.mkdir()
+    (state / "pending.json").symlink_to(victim)
+    h = mod.Helper(FakeRunner(), state, clock=Clock())  # a leftover symlink must not be read as state either
+    h._begin("dummy", "s", ["wg", "set", "wgnet1", "peer", "X", "remove"])
+    assert victim.read_text() == "precious"
+    p = state / "pending.json"
+    assert not p.is_symlink() and json.loads(p.read_text())["action"] == "dummy"
+    assert p.stat().st_mode & 0o077 == 0
+    assert [f.name for f in state.iterdir() if f.name.endswith((".tmp", ".part"))] == []
+
+
+def test_backup_request_symlink_not_followed(bk):
+    helper, runner, state = bk
+    victim = state.parent / "victim"
+    victim.write_text("precious")
+    (state / "backup-requests").mkdir()
+    (state / "backup-requests" / "pc.json").symlink_to(victim)
+    r = helper.handle({"action": "backup-run", "args": {"target": "pc", "categories": ["home"]}})
+    assert victim.read_text() == "precious"
+    assert r["ok"] is True or r["ok"] is False  # refusing is as acceptable as replacing the link
+
+
+@pytest.mark.parametrize("undo", [
+    ["touch", "/tmp/pwned"],
+    ["sh", "-c", "id"],
+    ["wg", "syncconf", "wgnet1", "/etc/shadow"],
+    ["wg", "syncconf", "wgnet1", "../../../etc/shadow"],
+    ["wg", "set", "othernet", "peer", "X", "remove"],
+    ["wg", "--version"],
+    "wg set wgnet1 peer X remove",
+])
+def test_tampered_pending_undo_is_not_executed(tmp_path, undo):
+    mod = load()
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "pending.json").write_text(json.dumps({"id": "a", "action": "x", "summary": "s", "expires_at": 0, "undo": undo}))
+    r = FakeRunner()
+    h = mod.Helper(r, state, clock=Clock())
+    assert r.calls == []
+    assert h.pending is None or h.pending.get("undo") in (None, [])
+
+
+@pytest.mark.parametrize("raw", ["[]", "null", '"x"', "5", "{", '{"id": 1}'])
+def test_malformed_pending_json_does_not_crash_start_or_expire(tmp_path, raw):
+    mod = load()
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "pending.json").write_text(raw)
+    h = mod.Helper(FakeRunner(), state, clock=Clock())
+    h.expire()
+    assert h.handle({"action": "pending"})["ok"] is True
+
+
+def test_non_numeric_expiry_cannot_stall_the_revert_loop(tmp_path):
+    mod = load()
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "pending.json").write_text(json.dumps(
+        {"id": "a", "action": "x", "expires_at": "never", "undo": ["wg", "set", "wgnet1", "peer", "X", "remove"]}))
+    clock = Clock()
+    h = mod.Helper(FlakyRunner(), state, clock=clock)  # undo fails on start, so pending is kept
+    clock.t += 3600
+    h.expire()  # must not raise (it runs in the server loop)
+    h.expire()
+
+
+@pytest.mark.parametrize("bad", [None, "", "wrong", 5, ["x"], {"a": 1}])
+@pytest.mark.parametrize("action", ["confirm", "revert"])
+def test_confirm_revert_need_exact_id(env, action, bad):
+    _, helper, runner, clock, state = env
+    begun = helper._begin("dummy", "s", ["wg", "set", "wgnet1", "peer", "X", "remove"])
+    args = {} if bad is None else {"id": bad}
+    r = helper.handle({"action": action, "args": args})
+    assert r["ok"] is False
+    assert helper.pending is not None and (state / "pending.json").exists()
+    assert runner.calls == []
+    clock.t += 61
+    helper.expire()  # the revert is still armed
+    assert runner.calls == [["wg", "set", "wgnet1", "peer", "X", "remove"]]
+    assert begun["ok"]
+
+
+@pytest.mark.parametrize("args", [
+    {"target": "--help"}, {"target": "-x"}, {"target": "pc\n"}, {"target": "pc "}, {"target": ["pc"]}, {"target": None}, {},
+])
+def test_backup_snapshots_target_never_reaches_argv_unvalidated(bk, args):
+    helper, runner, _ = bk
+    r = helper.handle({"action": "backup-snapshots", "args": args})
+    assert r["ok"] is False and runner.calls == []
+
+
+@pytest.mark.parametrize("target", ["-pc", "--pc"])
+def test_option_like_target_names_rejected_even_if_configured(tmp_path, target):
+    mod = load()
+    runner = FakeRunner()
+    cfg = {"destination_root": "/mnt/nas", "targets": [{"name": target, "kind": "ssh"}]}
+    h = mod.Helper(runner, tmp_path / "state", clock=Clock(), backup_config=lambda: cfg)
+    for action in ("backup-snapshots", "backup-run"):
+        r = h.handle({"action": action, "args": {"target": target}})
+        assert r["ok"] is False
+    assert runner.calls == []
+
+
+@pytest.mark.parametrize("pub", ["-" + "A" * 42 + "A=", "A" * 43 + "A=\n", " " + "A" * 43 + "A="])
+@pytest.mark.parametrize("action", ["peer-disable", "peer-enable", "peer-remove", "peer-set"])
+def test_wg_keys_with_dash_or_whitespace_rejected(env, action, pub):
+    _, helper, runner, _, _ = env
+    r = helper.handle({"action": action, "args": {"public_key": pub, "allowed_ips": ["10.8.0.9/32"]}})
+    assert r["ok"] is False and runner.calls == []
+
+
+@pytest.mark.parametrize("path", ["/home/x\n--delete", "/a/../b", "relative", "-rf", "/" + "a" * 1100, "/a\x00b", 5, None])
+def test_backup_export_path_rejected(bk, path):
+    helper, runner, _ = bk
+    r = helper.handle({"action": "backup-export", "args": {"target": "pc", "snapshot": "a1b2c3d4", "path": path}})
+    assert r["ok"] is False and runner.calls == []
+
+
+@pytest.mark.parametrize("snap", ["--all", "-a1b2c3d4", "a1b2c3d\n", "latest", "a1b2c3d", "g" * 8, None, 5])
+def test_backup_export_snapshot_rejected(bk, snap):
+    helper, runner, _ = bk
+    r = helper.handle({"action": "backup-export", "args": {"target": "pc", "snapshot": snap, "path": "/home"}})
+    assert r["ok"] is False and runner.calls == []
+
+
+def test_service_unit_hardening():
+    text = SERVICE.read_text()
+    for needle in ("ProtectSystem=", "ProtectKernelModules=yes", "ProtectKernelTunables=yes", "ProtectControlGroups=yes",
+                   "RestrictSUIDSGID=yes", "LockPersonality=yes"):
+        assert needle in text
+    if "ProtectSystem=strict" in text:  # then everything the helper writes must be listed, or actions break
+        rw = " ".join(line for line in text.splitlines() if line.startswith("ReadWritePaths="))
+        assert "/etc/wireguard" in rw  # wg-quick save
+    assert "ProtectSystem=no" not in text

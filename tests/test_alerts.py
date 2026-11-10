@@ -420,3 +420,14 @@ def test_escalation_to_finding_is_new(env):
     mod = env[0] if isinstance(env, tuple) else env
     f = {"sev": "finding", "rule": "disk-usage", "title": "Disk /srv 95%", "key": "disk-usage:Disk /srv 95%"}
     assert mod.new_findings([f], []) == [f]
+
+
+def test_newline_in_finding_title_cannot_inject_mail_headers(env, monkeypatch):
+    mod, fake, _, e = env
+    evil = {"sev": "finding", "rule": "r", "title": "x\r\nBcc: evil@example.org", "note": "n", "key": "r:evil"}
+    monkeypatch.setattr(mod, "current_findings", lambda *a, **k: [evil])
+    assert run(mod, fake, e) == 0
+    assert len(FakeSMTP.sent) == 1
+    msg = FakeSMTP.sent[0]
+    assert "\n" not in str(msg["Subject"]) and "\r" not in str(msg["Subject"])
+    assert msg["Bcc"] is None

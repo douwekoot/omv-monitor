@@ -281,3 +281,22 @@ def test_filesystems_missing_is_none_or_empty(fake):
     assert data.filesystems(fake) == []
     fake.data["node_filesystem_size_bytes"] = [vec(1000, mountpoint="/", fstype="ext4")]  # no avail
     assert data.filesystems(fake) == [{"mount": "/", "used_pct": None}]
+
+
+@pytest.mark.parametrize("kind,id", [
+    ("peer", 'a"} or vector(1) #'), ("peer", "a{b}"), ("peer", "a\\"), ("peer", "a\n"), ("peer", ""),
+    ("interface", 'eth0"}[5m] or {job=~".+'), ("interface", "a b"),
+    ("check", 'j",instance="x"} or up{a="'), ("check", 'blackbox:x"}'), ("check", "j:i\n"),
+])
+def test_history_never_sends_unsafe_ids_to_prometheus(kind, id):
+    c = FakeProm(ranges={"": []})
+    with pytest.raises(KeyError):
+        data.history(c, kind, id, 3600, SVCS)
+    assert c.calls == []
+
+
+def test_history_service_must_be_configured(tmp_path):
+    c = FakeProm()
+    with pytest.raises(KeyError):
+        data.history(c, "service", 'x"} or up{a="', 3600, SVCS)
+    assert c.calls == []

@@ -31,7 +31,7 @@ SNAP_RE = re.compile(r"[0-9a-f]{12}")
 MONITOR_TOML = "/opt/omv-monitor/config/monitor.toml"  # the web container mounts config/ read-only
 UNDO_RETRY = 5
 BACKUP_CFG = ("/opt/omv-monitor/config/backups.toml", "/opt/omv-monitor/data/backup-overrides.json")
-NAME_RE = re.compile(r"[a-z0-9-]+")
+NAME_RE = re.compile(r"[a-z0-9][a-z0-9-]*")  # never starts with "-": it ends up in argv/unit names
 RESTIC_ID_RE = re.compile(r"[0-9a-f]{8,64}")
 DEVICE_BACKUP = ["/usr/bin/python3", "/opt/omv-monitor/host/omv-device-backup.py"]
 PENDING_BUSY = "another change is pending: confirm or revert it first"
@@ -59,13 +59,33 @@ class Helper:
         self.confirm_fn = None  # runs on confirm only (e.g. delete a stash); lost on restart = stash kept, safe
         self.undo_fn = None  # in-memory only; a leftover pending.json can only replay an argv
         if self.pfile.exists():
-            try:
-                self.pending = json.loads(self.pfile.read_text())
-            except ValueError:
-                self.pending = {"id": "", "undo": None, "action": "corrupt"}
+            self.pending = self._load_pending()
             self._undo("leftover pending change reverted on start")
 
     # --- pending/confirm/revert framework -------------------------------
+    def _load_pending(self):
+        """pending.json is state, not trusted input: only a snapshot-restore argv may be replayed, anything else is dropped."""
+        bad = {"id": "", "undo": None, "action": "corrupt", "expires_at": 0}
+        try:
+            fd = os.open(self.pfile, os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(fd) as f:
+                p = json.load(f)
+        except (OSError, ValueError, RecursionError):
+            return bad
+        if not isinstance(p, dict):
+            return bad
+        undo = p.get("undo")
+        snaps = str(self.state_dir / "snapshots") + "/"
+        ok = (isinstance(undo, list) and len(undo) == 4 and undo[:3] == ["wg", "syncconf", IFACE]
+              and isinstance(undo[3], str) and undo[3].startswith(snaps)
+              and re.fullmatch(r"[0-9a-f]{12}\.conf", undo[3][len(snaps):])
+              or isinstance(undo, list) and undo[:3] == ["wg", "set", IFACE] and len(undo) > 3
+              and all(isinstance(x, str) and re.fullmatch(r"[A-Za-z0-9+/=]+|allowed-ips|peer|remove", x) for x in undo[3:]))
+        exp = p.get("expires_at")
+        return {"id": str(p.get("id", "")), "action": str(p.get("action", "")), "summary": str(p.get("summary", "")),
+                "expires_at": exp if isinstance(exp, (int, float)) and not isinstance(exp, bool) else 0,
+                "undo": undo if ok else None}
+
     def _begin(self, action, summary, undo):
         # undo: argv list (persisted, survives a helper restart) or a callable (in-memory only:
         # NOT reverted after a restart, only logged). Lockout-critical changes must pass an argv list.
@@ -76,9 +96,7 @@ class Helper:
             self.pending = {"id": secrets.token_hex(8), "action": action, "summary": summary,
                             "expires_at": self.clock() + self.revert_after, "undo": argv}
             self.undo_fn = None if argv else undo
-            fd = os.open(self.pfile, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "w") as f:
-                json.dump(self.pending, f)
+            self._write_private(self.pfile, json.dumps(self.pending))
             return {"ok": True, "result": {"id": self.pending["id"], "expires_at": self.pending["expires_at"]}}
 
     def _undo(self, why):
@@ -208,9 +226,12 @@ class Helper:
 
     def _write_private(self, path, text):
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        tmp = path.with_name(path.name + ".tmp")  # O_EXCL|O_NOFOLLOW then rename: never writes through a planted link
+        tmp.unlink(missing_ok=True)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, "w") as f:
             f.write(text)
+        os.replace(tmp, path)
 
     def _snapshot(self, action, summary, protect=None):
         sid = secrets.token_hex(6)
@@ -454,7 +475,7 @@ def serve_one(conn, helper):
         else:
             try:
                 reply = helper.handle(json.loads(buf.split(b"\n", 1)[0].decode()))
-            except ValueError:  # includes UnicodeDecodeError and JSONDecodeError
+            except (ValueError, RecursionError):  # includes UnicodeDecodeError and JSONDecodeError; deep nesting
                 reply = {"ok": False, "error": "invalid JSON"}
         conn.sendall(json.dumps(reply).encode() + b"\n")
         if buf is None:  # drain so closing does not reset the client before it reads the reply

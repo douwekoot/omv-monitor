@@ -155,3 +155,21 @@ def test_from_form_reset_thresholds():
     raw = settings.from_form(Form(disk_pct="70", reset_thresholds="1"))
     clean, errors = settings.validate(raw)
     assert errors == [] and clean["thresholds"] == {}
+
+
+@pytest.mark.parametrize("raw", [
+    {"default_range": "../x"}, {"refresh_s": True}, {"byte_units": "<b>"},
+    {"handshake_good_s": "1e3"}, {"handshake_good_s": "９０"}, {"panels": ["traffic", "<script>"]},
+    {"panels": "traffic"}, {"thresholds": []},
+])
+def test_invalid_values_are_never_persisted(tmp_path, raw):
+    p = tmp_path / "s.json"
+    with pytest.raises(ValueError):
+        settings.save(p, raw)
+    assert not p.exists()
+
+
+def test_unknown_keys_are_not_persisted(tmp_path):
+    p = tmp_path / "s.json"
+    settings.save(p, {"byte_units": "decimal", "evil": "<script>", "__proto__": {"x": 1}})
+    assert set(json.loads(p.read_text())) == set(settings.DEFAULTS)

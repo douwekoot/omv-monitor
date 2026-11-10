@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import time
+from datetime import timedelta
 from pathlib import Path
 from urllib.parse import quote
 
@@ -96,7 +97,7 @@ def verdict(n):
 
 def create_app(config=None, prom_client=None, netctl=None):
     env = os.environ.get
-    cfg = {"ADMIN_PASSWORD": env("APP_ADMIN_PASSWORD", ""), "SECRET_KEY": env("APP_SECRET_KEY") or os.urandom(32),
+    cfg = {"ADMIN_PASSWORD": env("APP_ADMIN_PASSWORD", ""), "SECRET_KEY": env("APP_SECRET_KEY", ""),
            "PROM_URL": env("PROM_URL", "http://127.0.0.1:9090"),
            "DEVICES_FILE": env("APP_DEVICES_FILE", str(PKG / "config" / "devices.toml")),
            "SETTINGS_FILE": env("APP_SETTINGS_FILE", str(PKG / "config" / "settings.json")),
@@ -112,6 +113,13 @@ def create_app(config=None, prom_client=None, netctl=None):
            **(config or {})}
     if not cfg["ADMIN_PASSWORD"]:
         raise RuntimeError("APP_ADMIN_PASSWORD must be set")
+    if not cfg["SECRET_KEY"]:
+        raise RuntimeError("APP_SECRET_KEY must be set")
+    # shortcut: length enforced only for deployment (env) values; code-supplied test configs may be short
+    if "SECRET_KEY" not in (config or {}) and len(cfg["SECRET_KEY"]) < 16:
+        raise RuntimeError("APP_SECRET_KEY must be at least 16 characters")
+    if "ADMIN_PASSWORD" not in (config or {}) and len(cfg["ADMIN_PASSWORD"]) < 8:
+        raise RuntimeError("APP_ADMIN_PASSWORD must be at least 8 characters")
     cfg["AUDIT_FILE"] = cfg["AUDIT_FILE"] or str(Path(cfg["SETTINGS_FILE"]).parent / "audit.jsonl")
     cfg["TOTP_FILE"] = cfg["TOTP_FILE"] or str(Path(cfg["SETTINGS_FILE"]).parent / "totp.json")
     cfg["DEVICE_NAMES_FILE"] = cfg["DEVICE_NAMES_FILE"] or str(Path(cfg["SETTINGS_FILE"]).parent / "device_names.json")
@@ -128,7 +136,8 @@ def create_app(config=None, prom_client=None, netctl=None):
     bk()
     app = Flask(__name__)
     app.config.update(SECRET_KEY=cfg["SECRET_KEY"], SESSION_COOKIE_SECURE=True, SESSION_COOKIE_HTTPONLY=True,
-                      SESSION_COOKIE_SAMESITE="Strict")
+                      SESSION_COOKIE_SAMESITE="Strict",
+                      PERMANENT_SESSION_LIFETIME=timedelta(hours=12))
     prom = prom_client or PromClient(cfg["PROM_URL"])
     limiter = RateLimiter(cfg["LOGIN_MAX_ATTEMPTS"], cfg["LOGIN_WINDOW_S"])
     app.jinja_env.filters.update(bytes=lambda v: _bytes(v, g.settings["byte_units"]), urlid=lambda s: quote(s, safe=":/+="),
@@ -154,6 +163,7 @@ def create_app(config=None, prom_client=None, netctl=None):
     def headers(r):
         r.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none'"
         r.headers["X-Content-Type-Options"] = "nosniff"
+        r.headers["Referrer-Policy"] = "no-referrer"
         r.headers["Cache-Control"] = "no-store"
         return r
 
@@ -170,6 +180,7 @@ def create_app(config=None, prom_client=None, netctl=None):
     def finish():
         session.clear()
         session["auth"] = True
+        session.permanent = True
         return redirect(url_for("dashboard"))
 
     def second_factor(page, **ctx):

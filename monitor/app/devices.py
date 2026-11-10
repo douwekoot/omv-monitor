@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import tempfile
 import tomllib
 from pathlib import Path
@@ -10,6 +11,13 @@ def peer_label(public_key):
     return public_key[:8].replace("/", "_").replace("+", "-")
 
 
+_KEY = re.compile(r"[A-Za-z0-9+/=_-]{8,64}")
+
+
+def valid_name(name):
+    return isinstance(name, str) and 1 <= len(name.strip()) and len(name) <= 40 and name.isprintable()
+
+
 def read_overrides(path):
     """{public_key or allowed_ips: name} from the JSON override file; missing or garbled -> {}."""
     if not path:
@@ -18,11 +26,17 @@ def read_overrides(path):
         d = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    return {k: v for k, v in d.items() if isinstance(k, str) and isinstance(v, str)} if isinstance(d, dict) else {}
+    return {k: v for k, v in d.items() if isinstance(k, str) and valid_name(v)} if isinstance(d, dict) else {}
+
+
+class BadInput(ValueError, OSError):
+    """Both, so web.py's `except OSError` audits a rejected rename instead of a 500 traceback."""
 
 
 def save_override(path, public_key, name):
     """Set one name (keyed by peer_label, the dashboard label; survives allowed_ips changes) in the override file, atomically (tempfile + os.replace, like settings.save)."""
+    if not (isinstance(public_key, str) and _KEY.fullmatch(public_key) and valid_name(name)):
+        raise BadInput("bad device name or key")
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     names = {**read_overrides(path), peer_label(public_key): name}

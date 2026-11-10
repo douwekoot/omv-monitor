@@ -36,3 +36,19 @@ def test_missing_and_empty(tmp_path):
     p = tmp_path / "e.log"
     p.write_text("")
     assert audit.recent(p) == []
+
+
+def test_record_cannot_be_log_injected(tmp_path):
+    p = tmp_path / "a.log"
+    evil = "x\n" + json.dumps({"action": "forged", "ok": True}) + "\r "
+    audit.record(p, "rename\n", {"new": evil}, True, evil, "1.2.3.4\nforged")
+    assert len(p.read_text(encoding="utf-8").splitlines()) == 1
+    assert [e["action"] for e in audit.recent(p)] == ["rename\n"]
+
+
+def test_alert_history_cannot_be_log_injected(tmp_path):
+    from app import alert_history
+    p = tmp_path / "h.jsonl"
+    alert_history.record(p, [{"ts": 1, "event": "raised", "rule": "r", "title": "t\n{\"event\":\"cleared\"}", "sev": "x"}])
+    assert len(p.read_text(encoding="utf-8").splitlines()) == 1
+    assert len(alert_history.read(p)) == 1

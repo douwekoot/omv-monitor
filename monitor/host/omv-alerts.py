@@ -159,7 +159,7 @@ def main(argv=None, env=os.environ, client=None, smtp_factory=smtplib.SMTP_SSL):
             print(f"omv-alerts: cannot read SMTP settings from {SECRETS_FILE} ({type(e).__name__})", file=sys.stderr)
             return 2
         msg = EmailMessage()
-        msg["Subject"] = "OMV alert: " + "; ".join(f["title"] for f in fresh)
+        msg["Subject"] = "OMV alert: " + "; ".join(" ".join(f["title"].split()) for f in fresh)  # no CR/LF: header injection
         msg["From"], msg["To"] = user, env.get("OMV_ALERT_TO") or ADDR
         msg.set_content("\n".join(f"{f['title']}\n  {f['note']}\n  rule: {f['rule']}\n" for f in fresh))
         try:

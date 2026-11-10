@@ -71,7 +71,7 @@ class Runner:
 
     def dump(self, argv, path):
         """Run argv with stdout streamed into path (binary, too big for memory)."""
-        with open(path, "wb") as f:
+        with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
             try:
                 p = subprocess.run(argv, stdout=f, stderr=subprocess.PIPE, timeout=6 * 3600)
             except subprocess.TimeoutExpired:
@@ -234,12 +234,12 @@ class DeviceBackup:
         if t["kind"] == "ssh":
             staged = [SSH_STAGED[c] for c in cats if c in SSH_STAGED]
             if staged:
-                script = f'S={STAGE}; rm -rf "$S"; mkdir -p "$S"; ' + "; ".join(staged)
+                script = f'S={STAGE}; rm -rf "$S"; umask 077; mkdir -p "$S"; ' + "; ".join(staged)
                 self._ssh_sh(t, host, script)  # best effort: a missing tool leaves an empty file
         else:
             staged = [LOCAL_STAGED[c] for c in cats if c in LOCAL_STAGED]
             if staged:
-                self.runner.run(["sh", "-c", f'S={STAGE}; rm -rf "$S"; mkdir -p "$S"; ' + "; ".join(staged)])
+                self.runner.run(["sh", "-c", f'S={STAGE}; rm -rf "$S"; umask 077; mkdir -p "$S"; ' + "; ".join(staged)])
             paths = [p for x in paths for p in (sorted(glob.glob(x)) or ([x] if "*" not in x else []))]
         args = ["backup", "--tag", "omv-device-backup"]
         args += [a for e in ex for a in ("--exclude", e)] + ["--", *paths]
@@ -343,6 +343,8 @@ class DeviceBackup:
         """restic dump of one folder into <destination_root>/.exports/<file>.tar (.part while running, .err on failure)."""
         if name not in {t["name"] for t in self.cfg["targets"]}:
             raise ValueError(f"unknown target {name}")
+        if not re.fullmatch(r"latest|[0-9a-f]{6,64}", snapshot) or not re.fullmatch(r"/[^\x00-\x1f]*", path):
+            raise ValueError("bad snapshot or path")  # would otherwise reach restic argv as an option
         if reason := self._dest_ok():  # an unmounted NAS disk would fill the system disk
             return self._log(name, "export", False, reason)
         d = self.exports_dir()

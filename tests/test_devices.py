@@ -1,6 +1,8 @@
 import pytest
 
-from app.devices import device_name, load_devices
+import json
+
+from app.devices import device_name, load_devices, read_overrides, save_override
 
 
 def test_load_devices(tmp_path):
@@ -54,3 +56,30 @@ def test_device_name_prefers_public_key_over_allowed_ips():
     assert device_name("10.8.0.2/32", d, "KEY=") == "Renamed"
     assert device_name("10.8.0.2/32", d, "OTHER=") == "Laptop"
     assert device_name("10.8.0.9/32", d, "KEY=") == "Renamed"
+
+
+@pytest.mark.parametrize("name", ["", "   ", "x" * 41, "a\nb", "a\0b", "a\tb", 5, None, ["a"]])
+def test_save_override_rejects_bad_names(tmp_path, name):
+    f = tmp_path / "names.json"
+    with pytest.raises(ValueError):
+        save_override(f, "AbCdEfGhIjKl", name)
+    assert not f.exists()
+
+
+@pytest.mark.parametrize("key", ["", "short", "ab cd efgh", "abcdefgh\n", "abcdefgh\0", 5, None])
+def test_save_override_rejects_bad_keys(tmp_path, key):
+    f = tmp_path / "names.json"
+    with pytest.raises(ValueError):
+        save_override(f, key, "Laptop")
+    assert not f.exists()
+
+
+def test_read_overrides_drops_non_string_and_oversized_names(tmp_path):
+    f = tmp_path / "n.json"
+    f.write_text(json.dumps({"AbCdEfGh": "ok", "b": 5, "c": "x" * 5000, "d": "a\nb"}))
+    assert read_overrides(f) == {"AbCdEfGh": "ok"}
+
+
+def test_save_override_rejection_is_oserror(tmp_path):
+    with pytest.raises(OSError):
+        save_override(tmp_path / "n.json", "abcdefgh!", "x")

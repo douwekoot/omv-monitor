@@ -84,3 +84,22 @@ def test_snapshots_are_capped(tmp_path):
         (snaps / f"omv-monitor-pre-deploy-2026-01-0{i}_000000.tar.gz").write_bytes(b"")
     run(tmp_path, "apply", STAGED)
     assert len(list(snaps.glob("omv-monitor-pre-deploy-*"))) == 5
+
+
+def test_snapshot_excludes_secrets_and_is_private(tmp_path):
+    live, *_ = setup(tmp_path)
+    write(live, {"secrets/smtp.env": "OMV_SMTP_PASSWORD=hunter2", "secrets/restic-pc.pass": "pw"})
+    r = run(tmp_path, "apply", STAGED)
+    assert r.returncode == 0, r.stderr
+    snap = next((tmp_path / "snaps").glob("omv-monitor-pre-deploy-*.tar.gz"))
+    with tarfile.open(snap) as t:
+        assert not [n for n in t.getnames() if "secrets" in n]
+    assert snap.stat().st_mode & 0o077 == 0  # /var/tmp is world-readable
+
+
+def test_stage_cannot_overwrite_server_secrets(tmp_path):
+    live, *_ = setup(tmp_path)
+    write(live, {"secrets/smtp.env": "real"})
+    r = run(tmp_path, "apply", {**STAGED, "secrets/smtp.env": "from-stage"})
+    assert r.returncode == 0, r.stderr
+    assert (live / "secrets/smtp.env").read_text() == "real"

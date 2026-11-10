@@ -20,7 +20,7 @@ def list_backups(root):
     out = {}
     for kind in KINDS:
         d = Path(root) / kind
-        found = [e for p in (d.iterdir() if d.is_dir() else ()) if (e := _entry(p))]
+        found = [e for p in (d.iterdir() if d.is_dir() and not d.is_symlink() else ()) if (e := _entry(p))]
         out[kind] = sorted((e for e in found if e["name"].startswith(kind + "-")), key=lambda e: e["name"],
                            reverse=True)
     return out
@@ -29,6 +29,8 @@ def list_backups(root):
 def resolve(root, kind, name):
     """The archive path for a download, or None for anything not listed."""
     if kind not in KINDS or not name.startswith(kind + "-") or not _NAME.fullmatch(name):
+        return None
+    if (Path(root) / kind).is_symlink():
         return None
     p = Path(root) / kind / name
     return p if _entry(p) else None
@@ -88,6 +90,8 @@ def resolve_export(root, name):
     """A ready export's path for download, or None for anything else."""
     m = _EXPORT.fullmatch(name)
     if not m or m["state"]:
+        return None
+    if Path(root).is_symlink():
         return None
     p = Path(root) / name
     return p if p.is_file() and not p.is_symlink() else None

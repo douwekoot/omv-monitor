@@ -15,9 +15,9 @@ revert() {
 case "${1:-}" in
   apply)
     revert
-    n=3
-    for ip in $ALLOWED; do iptables -I INPUT $n -s "$ip" -p tcp --dport 8443 -j ACCEPT; n=$((n+1)); done
-    iptables -I INPUT $n -p tcp --dport 8443 -j REJECT
+    # REJECT first, then accepts in front of it: a failure part-way leaves 8443 closed, never open.
+    iptables -I INPUT 3 -p tcp --dport 8443 -j REJECT
+    for ip in $ALLOWED; do iptables -I INPUT 3 -s "$ip" -p tcp --dport 8443 -j ACCEPT; done
     ;;
   revert) revert ;;
   *) echo "usage: $0 apply|revert" >&2; exit 2 ;;

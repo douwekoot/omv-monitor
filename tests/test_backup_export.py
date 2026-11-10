@@ -226,3 +226,32 @@ def test_download_ready_only(c, tmp_path):
 def test_download_needs_login(fake, tmp_path, nc, exports):
     c = make(fake, tmp_path, nc, EXPORT_DIR=str(exports)).test_client()
     assert get(c, f"/backups/exports/{READY}").status_code == 302
+
+
+_OK = "nas-0123abcd-Documents-20261030-0330.tar"
+
+
+@pytest.mark.parametrize("name", [
+    "../" + _OK, "/etc/passwd", "sub/" + _OK, _OK + "/../x", _OK + "\n", _OK + "\0", "%2e%2e%2f" + _OK, ".." ])
+def test_resolve_export_rejects_traversal(tmp_path, name):
+    (tmp_path / _OK).write_bytes(b"x")
+    assert backups.resolve_export(tmp_path, name) is None
+
+
+def test_resolve_export_refuses_symlink_and_symlinked_dir(tmp_path):
+    secret = tmp_path / "secret"
+    secret.write_text("x")
+    d = tmp_path / "exports"
+    d.mkdir()
+    (d / _OK).symlink_to(secret)
+    assert backups.resolve_export(d, _OK) is None
+    link = tmp_path / "link"
+    link.symlink_to(d)
+    (d / _OK).unlink()
+    (d / _OK).write_bytes(b"x")
+    assert backups.resolve_export(link, _OK) is None  # base dir itself must not be a symlink
+
+
+@pytest.mark.parametrize("p", ["/a/../b", "/a/\nb", "rel", "/a\0b", "/" + "a" * 1100, None, 5])
+def test_valid_export_path_rejects(p):
+    assert not backups.valid_export_path(p)

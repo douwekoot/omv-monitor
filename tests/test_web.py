@@ -308,3 +308,12 @@ def test_dashboard_traffic_axis_follows_visible_peak(fake):
     fake.ranges["rate(node_network_receive_bytes_total"] = fake.ranges["rate(node_network_transmit_bytes_total"] = s
     h = get(logged_in(fake), "/").get_data(as_text=True)
     assert "Peak 3 KiB/s" in h and "<span>5 KiB/s</span>" in h
+
+
+def test_weak_env_secret_or_password_refuses_to_start(monkeypatch):
+    import pytest
+    for k, pw in (("a", "longenoughpw"), ("k" * 32, "short")):
+        monkeypatch.setenv("APP_SECRET_KEY", k)
+        monkeypatch.setenv("APP_ADMIN_PASSWORD", pw)
+        with pytest.raises(RuntimeError):
+            create_app({}, prom_client=FakeProm())

@@ -12,7 +12,7 @@ SNAPS=${OMV_SNAP_DIR:-/var/tmp}
 KEEP=5
 URL=https://192.168.1.10:8443/login
 # Server-only state: never in git, never overwritten or snapshotted here.
-LOCAL_ONLY='^(\.env|certs|data)(/|$)'
+LOCAL_ONLY='^(\.env|certs|data|secrets)(/|$)'
 
 changes() {
   # Paths (relative to DIR) that the stage adds or changes. Files removed from git are left on the server.
@@ -55,10 +55,12 @@ apply)
   if [ -z "$c" ]; then echo "Server is up to date; nothing to do."; rm -rf "$STAGE"; exit 0; fi
   echo "Updating:"; sed 's/^/  /' <<<"$c"
   snap="$SNAPS/omv-monitor-pre-deploy-$(date +%Y-%m-%d_%H%M%S).tar.gz"
-  tar -C "$DIR" --exclude=./.env --exclude=./certs --exclude=./data -czf "$snap" .
+  # umask only for the snapshot: the cp below must keep files readable by the non-root web container
+  (umask 077; tar -C "$DIR" --exclude=./.env --exclude=./certs --exclude=./data --exclude=./secrets -czf "$snap" .)
+  chmod 600 "$snap"
   echo "Snapshot: $snap"
   ls -1t "$SNAPS"/omv-monitor-pre-deploy-*.tar.gz | tail -n +$((KEEP + 1)) | xargs -r rm -f
-  rm -rf "$STAGE/.env" "$STAGE/certs" "$STAGE/data"
+  rm -rf "$STAGE/.env" "$STAGE/certs" "$STAGE/data" "$STAGE/secrets"
   cp -r --no-preserve=ownership "$STAGE/." "$DIR/"
   rm -rf "$STAGE"
   for u in "$DIR"/host/*.service "$DIR"/host/*.timer; do

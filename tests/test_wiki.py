@@ -66,3 +66,32 @@ def test_contents_and_sections(tmp_path):
     assert toc == [("one", "One"), ("two-more", "Two &amp; more")] and 'id="one"' in html
     from app.wiki import sections
     assert sections(tmp_path) == [("Net", [("b", "B", "Bee")]), ("Other", [("a", "A", "")])]
+
+
+@pytest.mark.parametrize("slug", ["../secret", "..", "a/b", "/etc/passwd", "a\0b", "A", "x\n", "%2e%2e", ""])
+def test_render_page_rejects_bad_slugs(tmp_path, slug):
+    (tmp_path / "secret.md").write_text("# nope")
+    with pytest.raises(ValueError):
+        render_page(tmp_path / "wiki", slug)
+
+
+def test_render_page_refuses_symlink_out_of_dir(tmp_path):
+    w = tmp_path / "wiki"
+    w.mkdir()
+    (tmp_path / "outside.md").write_text("# Outside\nsecret")
+    (w / "leak.md").symlink_to(tmp_path / "outside.md")
+    with pytest.raises((KeyError, ValueError)):
+        render_page(w, "leak")
+    assert "leak" not in dict(list_pages(w))
+
+
+@pytest.mark.parametrize("src", [
+    "<script>alert(1)</script>", "<img src=x onerror=alert(1)>", "[x](javascript:alert(1))",
+    "[x](JaVaScript:alert(1))", "![x](data:text/html;base64,AAAA)", "## <b onmouseover=x>h</b>", "`<i>`",
+])
+def test_render_markdown_has_no_live_html(src):
+    from app.wiki import render_markdown
+    html, toc = render_markdown(src)
+    assert not re.search(r"<(script|img|b|i)\b", html)
+    assert "javascript:" not in html.lower() and "data:text" not in html.lower()
+    assert all("<" not in t for _, t in toc)

@@ -133,3 +133,29 @@ def test_sidebar_lists_targets_and_archive_kinds(fake, tmp_path, broot):
     side = re.search(r"<aside.*?</aside>", get(c, "/backups").get_data(as_text=True), re.S).group(0)
     assert re.search(r'href="/backups/targets/[^"]+"', side)
     assert 'href="/backups#h-bk-config"' in side and 'href="/backups#h-bk-prometheus"' in side
+
+
+@pytest.mark.parametrize("name", [
+    "../config/config-2026-10-30_0330.tar.gz", "/etc/passwd", "config/../config/config-2026-10-30_0330.tar.gz",
+    "config-2026-10-30_0330.tar.gz/", "config-2026-10-30_0330.tar.gz\n", "config-2026-10-30_0330.tar.gz\0",
+    "config%2F..%2Fx-2026-10-30_0330.tar.gz", "config-2026-10-30_0330.tar.gz/../../x",
+])
+def test_resolve_rejects_traversal_names(broot, name):
+    assert backups.resolve(broot, "config", name) is None
+
+
+@pytest.mark.parametrize("kind", ["..", "config/..", "/etc", "", "config\0", "CONFIG"])
+def test_resolve_rejects_bad_kinds(broot, kind):
+    assert backups.resolve(broot, kind, "config-2026-10-30_0330.tar.gz") is None
+
+
+def test_resolve_refuses_symlinked_archive_and_kind_dir(broot, tmp_path):
+    secret = tmp_path / "secret"
+    secret.write_text("x")
+    (broot / "config" / "config-2026-11-01_0330.tar.gz").symlink_to(secret)
+    assert backups.resolve(broot, "config", "config-2026-11-01_0330.tar.gz") is None
+    out = tmp_path / "outside"
+    archive(out, "wiki", "wiki-2026-10-30_0330.tar.gz")
+    (broot / "wiki").symlink_to(out / "wiki")
+    assert backups.resolve(broot, "wiki", "wiki-2026-10-30_0330.tar.gz") is None
+    assert backups.list_backups(broot)["wiki"] == []
